@@ -1,6 +1,16 @@
 version: "3.8"
 
 services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+     - redis-data:/data
+    networks:
+     - n8n-network
+
   # Python FastAPI Service
   python-api:
     build:
@@ -9,8 +19,8 @@ services:
     container_name: python-api
     volumes:
       - ./scripts:/app/scripts:ro
-    ports:
-      - "8000:8000"
+    # ports:
+    #   - "8000:8000"
     networks:
       - n8n-network
       - monitoring
@@ -32,8 +42,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
+    # ports:
+    #   - "9090:9090"
     networks:
       - monitoring
     restart: unless-stopped
@@ -48,8 +58,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3000:3000"
+    # ports:
+    #   - "3000:3000"
     networks:
       - monitoring
     restart: unless-stopped
@@ -66,8 +76,8 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    ports:
-      - "8080:8080"
+    # ports:
+    #   - "8080:8080"
     networks:
       - monitoring
     restart: unless-stopped
@@ -84,41 +94,66 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
-    ports:
-      - "9100:9100"
+    # ports:
+    #   - "9100:9100"
     networks:
       - monitoring
     restart: unless-stopped
 
 
   # n8n Workflow Automation
-  n8n:
+  n8n-main:
     image: n8nio/n8n:latest
-    container_name: n8n
-    ports:
-      - "5678:5678"
+    container_name: n8n-main
+    restart: unless-stopped
     environment:
+      - NODE_ENV=production
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=pass
-      - N8N_HOST=n8n
       - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PROTOCOL=https
+      - N8N_HOST=n8n.dashboard.com
+      - WEBHOOK_URL=https://n8n.dashboard.com  # replace https://n8n.dashboard.com | https://localhost:5678/
+      - EXECUTIONS_MODE=queue               # Controls whether executions run in the main process or a subprocess.
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=0               # You can isolate n8n by using a different DB number.
+      - QUEUE_BULL_REDIS_PASSWORD=          # Leave empty if Redis has no password like now
+      - N8N_SECURE_COOKIE=True
+      - N8N_ENCRYPTION_KEY=a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5
+      # generate with "openssl rand -hex 32"
+      # n8n-main and n8n-workers must have the SAME key
       - GENERIC_TIMEZONE=UTC
-      - N8N_SECURE_COOKIE=false
+    ports:
+      - "127.0.0.1:5678:5678"
     volumes:
-      - ./n8n-data:/home/node/.n8n
+      - n8n-data:/home/node/.n8n
     networks:
       - n8n-network
-    restart: unless-stopped
     depends_on:
-      - python-api
+      - redis
+
+  n8n-worker:
+    image: n8nio/n8n:latest
+    container_name: n8n-worker
+    restart: unless-stopped
+    command: n8n worker
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=0
+      - QUEUE_BULL_REDIS_PASSWORD=
+      - N8N_ENCRYPTION_KEY=a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5
+    depends_on:
+      - redis
 
 volumes:
   prometheus_data:
   grafana_data:
+  redis-data:
+  n8n-data:
 
 networks:
   n8n-network:

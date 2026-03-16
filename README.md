@@ -1,6 +1,6 @@
 # N8N Python Executor
 
-A FastAPI-based Python execution service designed for n8n workflow automation. Executes user-provided Python scripts in isolated worker processes with Prometheus metrics and Grafana visualization.
+A production-ready FastAPI-based Python execution service designed for n8n workflow automation. Features horizontal scaling with queue-based n8n workers, automatic SSL provisioning, nginx reverse proxy, systemd-based autoscaling, and comprehensive monitoring with Prometheus and Grafana.
 
 ---
 
@@ -12,46 +12,82 @@ A FastAPI-based Python execution service designed for n8n workflow automation. E
 4. [API Reference](#api-reference)
 5. [Metrics & Monitoring](#metrics--monitoring)
 6. [Deployment Guide](#deployment-guide)
-7. [n8n Integration](#n8n-integration)
-8. [Security Considerations](#security-considerations)
-9. [Troubleshooting](#troubleshooting)
+7. [Autoscaling & Health Monitoring](#autoscaling--health-monitoring)
+8. [n8n Integration](#n8n-integration)
+9. [Security Considerations](#security-considerations)
+10. [Troubleshooting](#troubleshooting)
+11. [Notice](#notice)
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────┐     HTTP POST      ┌─────────────────┐
-│   n8n       │ ─────────────────▶ │  python-api     │
-│  (5678)     │  {data, code_file} │   (FastAPI)     │
-└─────────────┘                    │                 │
-                                   │  ┌─────────────┐│
-                                   │  │ Worker Pool ││
-                                   │  │ 4 processes ││
-                                   │  │ DRAIN/STOP  ││
-                                   │  └─────────────┘│
-                                   └────────┬────────┘
-                                            │
-                              ┌─────────────┼─────────────┐
-                              ▼             ▼             ▼
-                        ┌─────────┐   ┌──────────┐  ┌──────────┐
-                        │Prometheus│   │  Grafana │  │ cAdvisor │
-                        │ (9090)  │   │  (3000)  │  │  (8080)  │
-                        └─────────┘   └──────────┘  └──────────┘
+                                    ┌─────────────────┐
+                                    │   Internet      │
+                                    └────────┬────────┘
+                                             │
+                                    ┌────────▼────────┐
+                                    │  Nginx (443)    │
+                                    │  SSL/TLS        │
+                                    │  Reverse Proxy  │
+                                    └────────┬────────┘
+                                             │
+                    ┌────────────────────────┼────────────────────────┐
+                    │                        │                        │
+           ┌────────▼────────┐      ┌───────▼────────┐      ┌────────▼────────┐
+           │  /grafana/      │      │      /         │      │   /healthz      │
+           │  Grafana (3000) │      │  n8n-main      │      │  Health Check   │
+           │  Dashboards     │      │  (5678)        │      │                 │
+           └─────────────────┘      └───────┬────────┘      └─────────────────┘
+                                             │
+                              ┌──────────────┼──────────────┐
+                              │              │              │
+                    ┌─────────▼─────┐ ┌────▼──────┐ ┌─────▼──────┐
+                    │  python-api   │ │   Redis   │ │  n8n-worker│
+                    │   (8000)      │ │  (6379)   │ │  (scaled)  │
+                    │  Worker Pool  │ │  Queue    │ │            │
+                    │  4 processes  │ │           │ │            │
+                    └───────┬───────┘ └───────────┘ └────────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+        ┌─────────┐   ┌──────────┐  ┌──────────┐
+        │Prometheus│   │  cAdvisor │  │node-exporter
+        │ (9090)  │   │  (8080)  │  │  (9100)  │
+        └─────────┘   └──────────┘  └──────────┘
 ```
 
 ---
 
 ## System Components
 
+### Core Application Services
+
 | Component | Purpose | Port | Image/Build |
 |-----------|---------|------|-------------|
 | **python-api** | Execute Python scripts in worker pool | 8000 | `Dockerfile` |
-| **n8n** | Workflow automation platform | 5678 | `n8nio/n8n:latest` |
+| **n8n-main** | Workflow automation platform (queue mode) | 5678 | `n8nio/n8n:latest` |
+| **n8n-worker** | Scalable queue workers for n8n executions | — | `n8nio/n8n:latest` |
+| **redis** | Queue broker for n8n and potential API queue | 6379 | `redis:latest` |
+
+### Monitoring & Observability
+
+| Component | Purpose | Port | Image |
+|-----------|---------|------|-------|
 | **prometheus** | Metrics collection and storage | 9090 | `prom/prometheus:v3.10.0` |
 | **grafana** | Metrics visualization dashboards | 3000 | `grafana/grafana:main-ubuntu` |
 | **cadvisor** | Container resource metrics | 8080 | `gcr.io/cadvisor/cadvisor:v0.47.2` |
 | **node-exporter** | Host system metrics | 9100 | `prom/node-exporter:v1.7.0` |
+
+### Infrastructure & Automation
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **nginx** | SSL termination, reverse proxy, static health endpoint | Host systemd |
+| **certbot** | Automatic SSL certificate provisioning | Host |
+| **autoscaler** | Dynamic n8n-worker scaling based on queue depth | `/usr/local/bin/autoscaler.sh` |
+| **nginx-health** | Automatic nginx recovery monitoring | `/usr/local/bin/nginx-health.sh` |
 
 ---
 
@@ -61,20 +97,31 @@ A FastAPI-based Python execution service designed for n8n workflow automation. E
 
 | Step | Component | Action |
 |------|-----------|--------|
-| 1 | n8n | HTTP POST to `python-api:8000/execute` |
-| 2 | python-api | Load script from `/app/scripts/{code_file_name}` |
-| 3 | python-api | Submit job to worker pool queue |
-| 4 | Worker | `exec()` script with `data` in local scope |
-| 5 | Worker | Return `result` via result queue |
-| 6 | python-api | Respond with `{"result": ...}` |
-| 7 | Prometheus | Scrape metrics from `/metrics` endpoint |
+| 1 | Client | HTTPS request to `https://n8n.dashboard.com` |
+| 2 | nginx | SSL termination, route to appropriate backend |
+| 3 | n8n-main | Execute workflow, queue heavy jobs to Redis |
+| 4 | n8n-worker | Pull job from Redis queue, execute |
+| 5 | n8n (HTTP node) | POST to `http://python-api:8000/execute` |
+| 6 | python-api | Load script from `/app/scripts/{code_file_name}` |
+| 7 | python-api | Submit job to worker pool queue |
+| 8 | Worker | `exec()` script with `data` in local scope |
+| 9 | Worker | Return `result` via result queue |
+| 10 | python-api | Respond with `{"result": ...}` |
+| 11 | Prometheus | Scrape metrics from `/metrics` endpoint |
 
-### Worker Signals
+### Worker Signals (python-api)
 
 | Signal | Behavior | Use Case |
 |--------|----------|----------|
 | `STOP` | Immediate exit, drops current job | Shutdown |
 | `DRAIN` | Finish current job, then exit | Graceful restart (every 5 min) |
+
+### n8n Queue Mode
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `queue` | Main instance queues jobs, workers execute | Production, scalable |
+| `regular` | Main instance executes everything | Development only |
 
 ---
 
@@ -123,7 +170,7 @@ List available Python scripts.
 **Response:**
 ```json
 {
-  "scripts": [str, str]
+  "scripts": ["normalize_mobile.py", "validate_email.py", "geocode_address.py"]
 }
 ```
 
@@ -170,40 +217,92 @@ Exposed via `prometheus-client` in `main.py`:
 
 ## Deployment Guide
 
+WARNING:The N8N_ENCRYPTION_KEY hardcoded, Grafana: admin/admin and n8n: admin/pass
+at docker-compose.yml (lines 85 and 102) are PLACEHOLDERS.
+
+MODIFY THEM FOR YOUR ENVIRONMENT.
+
+I do NOT take responsability for any use of these files.
+I do NOT restrict or monetize them.
+
 ### Prerequisites
 
 - Ubuntu 24.04 Server LTS
-- Docker Engine with Compose plugin
+- Domain name pointing to server (e.g., `n8n.dashboard.com`)
+- Root or sudo access
 
-### Host Setup
+### Quick Deploy (Automatic)
 
 ```bash
 # 1. Transfer project to VM
-tar czf n8n-python-project.tar.gz n8n-python-project/
-scp n8n-python-project.tar.gz user@VM_IP:/home/user/
+tar czf n8n.tar.gz n8n-python-project/
+scp n8n.tar.gz user@VM_IP:/home/user/
 
-# 2. On VM: extract and deploy
-tar xzf n8n-python-project.tar.gz
+# 2. On VM: run auto-deploy
+chmod +x auto-deploy.sh
+sudo ./auto-deploy.sh
+```
+
+The `auto-deploy.sh` script automatically:
+- Installs Docker, nginx, certbot
+- Builds and starts all services
+- Configures SSL certificates
+- Sets up firewall rules
+- Installs systemd autoscaling services
+- Fixes permissions
+
+### Manual Deploy
+
+```bash
+# 1. Transfer and extract
+tar xzf n8n.tar.gz
 cd n8n-python-project
 
-# 3. Build and start
+# 2. Build and start
 docker compose build
 docker compose up -d
 
-# 4. Fix n8n permissions (first run only)
+# 3. Fix permissions (first run only)
 sudo chown -R 1000:1000 n8n-data/
 sudo chown -R 1000:1000 scripts/
 
-# 5. Verify
+# 4. Configure nginx manually
+sudo cp HTTPS/nginx.conf /etc/nginx/sites-available/n8n_grafana.conf
+sudo ln -sf /etc/nginx/sites-available/n8n_grafana.conf /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+
+# 5. Obtain SSL certificate
+sudo certbot --nginx -d n8n.dashboard.com --non-interactive --agree-tos -m your-email@example.com
+
+# 6. Configure firewall
+sudo ufw default deny incoming
+sudo ufw allow 22/tcp      # SSH
+sudo ufw allow 80/tcp      # HTTP redirect
+sudo ufw allow 443/tcp     # HTTPS
+sudo ufw enable
+
+# 7. Install systemd services
+sudo ./autoscaler/setup-systemd.sh
+
+# 8. Verify
 docker compose ps
-docker compose logs -f python-api
+sudo systemctl list-timers --all | grep -E "(autoscaler|nginx-health)"
 ```
 
 ### Directory Structure
 
 ```
 n8n-python-project/
+├── auto-deploy.sh              # One-command deployment script
 ├── docker-compose.yml          # Service orchestration
+├── HTTPS/
+│   ├── nginx.conf              # Nginx reverse proxy config
+│   ├── firewall_rules.sh       # UFW firewall setup
+│   └── nginx_health.sh         # Nginx health check script
+├── autoscaler/
+│   ├── autoscaler.sh           # n8n-worker scaling logic
+│   ├── setup-systemd.sh        # Systemd service installer
 ├── python-api/
 │   ├── Dockerfile              # Python 3.12 + dependencies
 │   ├── main.py                 # FastAPI application
@@ -232,6 +331,69 @@ result = {
     "name": f"{person.get('first_name', '')} {person.get('last_name', '')}".strip()
 }
 ```
+
+---
+
+## Autoscaling & Health Monitoring
+
+### n8n-Worker Autoscaler
+
+Automatically scales `n8n-worker` containers based on Prometheus metrics.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MIN_REPLICAS` | 1 | Minimum worker containers |
+| `MAX_REPLICAS` | 10 | Maximum worker containers |
+| `QUEUE_THRESHOLD_UP` | 20 | Scale up when queue depth exceeds |
+| `QUEUE_THRESHOLD_DOWN` | 5 | Scale down when queue below |
+| `SCALE_COOLDOWN` | 60s | Minimum time between scaling events |
+
+**How it works:**
+1. Queries Prometheus for `rate(py_api_requests_total[5m])` as load proxy
+2. Compares against thresholds
+3. Scales via `docker compose up -d --scale n8n-worker=N`
+
+**Management:**
+```bash
+# View timer status
+sudo systemctl status autoscaler.timer
+
+# View logs
+sudo journalctl -u autoscaler.service -f
+
+# Disable autoscaling
+sudo systemctl stop autoscaler.timer
+sudo systemctl disable autoscaler.timer
+```
+
+### Nginx Health Monitor
+
+Ensures nginx stays running and responsive.
+
+**Checks every 2 minutes:**
+1. Is nginx service active?
+2. Does `http://localhost/healthz` respond?
+
+**Recovery actions:**
+- Service down → `systemctl restart nginx`
+- Unresponsive → `systemctl reload nginx`
+
+**Management:**
+```bash
+# View logs
+sudo tail -f /var/log/nginx-health.log
+sudo journalctl -u nginx-health.service -f
+
+# Manual test
+curl -f http://localhost/healthz
+```
+
+### Systemd Services Reference
+
+| Service | Type | Trigger | Purpose |
+|---------|------|---------|---------|
+| `autoscaler.service` | oneshot | `autoscaler.timer` (30s) | Scale workers |
+| `nginx-health.service` | oneshot | `nginx-health.timer` (2m) | Recover nginx |
 
 ---
 
@@ -264,16 +426,26 @@ result = {
 
 Use `GET http://python-api:8000/scripts` to populate dropdowns in n8n.
 
+### Webhook URL Configuration
+
+Set in n8n environment or UI:
+```
+https://n8n.dashboard.com
+```
+
 ---
 
 ## Security Considerations
 
 | Layer | Mitigation |
 |-------|-----------|
-| Script execution | `exec()` in isolated subprocess; scripts vetted before deployment |
-| File access | `os.path.basename()` prevents directory traversal |
-| Container escape | Non-root user, read-only script mount |
-| Network | Internal Docker networks; only `python-api:8000` and `n8n:5678` exposed |
+| **Transport** | TLS 1.2+ via Let's Encrypt certificates |
+| **Script execution** | `exec()` in isolated subprocess; scripts vetted before deployment |
+| **File access** | `os.path.basename()` prevents directory traversal |
+| **Container escape** | Non-root user, read-only script mount |
+| **Network** | Internal Docker networks; only nginx (443) exposed externally |
+| **Firewall** | UFW denies incoming except 22, 80, 443 |
+| **Secrets** | n8n encryption key in environment; basic auth enabled |
 
 **Note:** `exec()` runs with full Python capabilities. All scripts must be reviewed before deployment to the `scripts/` directory.
 
@@ -281,22 +453,51 @@ Use `GET http://python-api:8000/scripts` to populate dropdowns in n8n.
 
 ## Troubleshooting
 
+### Deployment Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Failed to extract n8n.tar.gz` | Archive missing or corrupted | Re-create with `tar czf n8n.tar.gz n8n-python-project/` |
+| `Certbot failed` | Domain not pointing to server | Verify DNS A record; check `dig +short n8n.dashboard.com` |
+| `docker: command not found` | Docker not installed | Script should install; if failed: `sudo apt install docker-ce` |
+
+### Service Issues
+
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `404 Script not found` | File missing or wrong name | Check `./scripts/` on host; verify `code_file_name` |
 | `result is None` | Script didn't assign `result` | Ensure script sets `result = ...` |
-| Worker timeout | Script runs >60s | Optimize script or increase timeout |
-| Port 8000 in use | Another service bound | `sudo lsof -i :8000` to find conflict |
+| Worker timeout | Script runs >60s | Optimize script or increase timeout in `main.py` |
 | n8n permission denied | `n8n-data` owned by root | `sudo chown -R 1000:1000 n8n-data/` |
 | Grafana no data | Prometheus not scraping | Check `http://VM_IP:9090/targets` all UP |
+
+### Scaling Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Workers not scaling up | Queue below threshold or cooldown active | Check `sudo journalctl -u autoscaler.service` |
+| Too many workers | Threshold too low or cooldown ignored | Adjust `QUEUE_THRESHOLD_UP` in `/usr/local/bin/autoscaler.sh` |
+| Redis connection errors | Redis container down | `docker compose restart redis` |
+
+### Nginx Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `502 Bad Gateway` | Backend container down | `docker compose ps` to check status |
+| SSL certificate expired | Certbot renewal failed | `sudo certbot renew --force-renewal` |
+| `/healthz` 404 | nginx config not loaded | `sudo nginx -t && sudo systemctl reload nginx` |
 
 ### Log Locations
 
 | Service | Command |
 |---------|---------|
 | python-api | `docker logs python-api` |
-| n8n | `docker logs n8n` |
-| All | `docker compose logs -f` |
+| n8n-main | `docker logs n8n-main` |
+| n8n-worker | `docker logs n8n-worker` |
+| All containers | `docker compose logs -f` |
+| Autoscaler | `sudo journalctl -u autoscaler.service -f` |
+| Nginx health | `sudo tail -f /var/log/nginx-health.log` |
+| Nginx | `sudo journalctl -u nginx -f` |
 
 ---
 
@@ -314,16 +515,39 @@ Scripts are cached by modification time. To force reload:
 2. mtime change detected on next request
 3. New content loaded and cached
 
-### Backup
+### SSL Certificate Renewal
 
-| Path | Contents |
-|------|----------|
-| `./n8n-data/` | n8n workflows, credentials |
-| `./scripts/` | User Python scripts |
-| `prometheus_data/` | Metrics history (optional) |
+Certbot auto-renews via systemd timer. Verify with:
+```bash
+sudo certbot renew --dry-run
+```
 
----
+## NOTICE
 
-## License
+This project uses the following third-party software. See their respective repositories for full license texts.
 
-MIT License - See individual component licenses for dependencies.
+### Python Dependencies
+
+| Package | License |
+|---------|---------|
+| FastAPI | MIT |
+| Uvicorn | BSD-3-Clause |
+| Pydantic | MIT |
+| prometheus-client | Apache-2.0 |
+
+### Container Images
+
+| Component | License |
+|-----------|---------|
+| Prometheus | Apache-2.0 |
+| Grafana | AGPL-3.0 |
+| cAdvisor | Apache-2.0 |
+| Node Exporter | Apache-2.0 |
+| n8n | [Sustainable Use License](https://github.com/n8n-io/n8n/blob/master/LICENSE.md) |
+| Redis | BSD-3-Clause |
+
+**Notes:**
+- Grafana is used unmodified via official Docker image. AGPL-3.0 applies if modified or redistributed.
+- n8n's Sustainable Use License restricts high-volume production use; review terms before scaling.
+- Full license texts: https://opensource.org/licenses
+
