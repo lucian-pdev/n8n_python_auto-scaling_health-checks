@@ -11,7 +11,7 @@ echo "Installing autoscaler and health checker..."
 
 # Install scripts
 sudo cp "./autoscaler/autoscaler.sh" "$TARGET_DIR/"
-sudo cp ".//HTTPS/nginx_health.sh" "$TARGET_DIR/"
+sudo cp "./HTTPS/nginx_health.sh" "$TARGET_DIR/"
 sudo chmod +x "$TARGET_DIR/autoscaler.sh" "$TARGET_DIR/nginx_health.sh"
 
 # Create log file
