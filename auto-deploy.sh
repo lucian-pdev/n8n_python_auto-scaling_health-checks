@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-DOMAIN="n8n.dashboard.com"
+DOMAIN="n8n.dashboard.com"      # CHANGE THIS
 EMAIL="your-email@example.com"  # CHANGE THIS
 
 echo "=== Starting deployment for $DOMAIN ==="
@@ -26,11 +26,6 @@ sudo systemctl enable --now docker
 sudo groupadd -f docker
 sudo usermod -aG docker "$USER"
 
-# Extract and deploy
-echo "Extracting project..."
-tar xf n8n.tar.gz || { echo "Failed to extract n8n.tar.gz"; exit 1; }
-cd n8n-python-project || { echo "Failed to enter directory"; exit 1; }
-
 echo "Building and starting services..."
 docker compose build
 docker compose up -d
@@ -42,6 +37,7 @@ sudo chown -R 1000:1000 scripts/ 2>/dev/null || true
 
 # Install systemd services
 echo "Installing systemd services..."
+sudo chmod +x ./autoscaler/setup-systemd.sh
 sudo ./autoscaler/setup-systemd.sh
 
 # Configure nginx
@@ -61,6 +57,7 @@ sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" || {
 
 # Firewall
 echo "Configuring firewall..."
+sudo chmod +x ./HTTPS/firewall_rules.sh
 sudo ./HTTPS/firewall_rules.sh
 
 echo "=== Deployment complete ==="

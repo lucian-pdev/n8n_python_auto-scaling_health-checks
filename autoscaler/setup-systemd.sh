@@ -4,19 +4,19 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="/usr/local/bin"
 
 echo "Installing autoscaler and health checker..."
 
 # Install scripts
-sudo cp "$SCRIPT_DIR/autoscaler.sh" "$TARGET_DIR/"
-sudo cp "$SCRIPT_DIR/nginx-health.sh" "$TARGET_DIR/"
-sudo chmod +x "$TARGET_DIR/autoscaler.sh" "$TARGET_DIR/nginx-health.sh"
+sudo cp "./autoscaler/autoscaler.sh" "$TARGET_DIR/"
+sudo cp ".//HTTPS/nginx_health.sh" "$TARGET_DIR/"
+sudo chmod +x "$TARGET_DIR/autoscaler.sh" "$TARGET_DIR/nginx_health.sh"
 
 # Create log file
-sudo touch /var/log/nginx-health.log
-sudo chmod 644 /var/log/nginx-health.log
+sudo touch /var/log/nginx_health.log
+sudo chmod 644 /var/log/nginx_health.log
 
 # Install bc if not present
 sudo apt-get update && sudo apt-get install -y bc jq
@@ -52,7 +52,7 @@ WantedBy=timers.target
 EOF
 
 # === NGINX HEALTH SERVICE ===
-sudo tee /etc/systemd/system/nginx-health.service > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/nginx_health.service > /dev/null << 'EOF'
 [Unit]
 Description=Nginx Health Checker
 After=nginx.service
@@ -60,7 +60,7 @@ Wants=nginx.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/nginx-health.sh
+ExecStart=/usr/local/bin/nginx_health.sh
 StandardOutput=journal
 StandardError=journal
 
@@ -68,7 +68,7 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-sudo tee /etc/systemd/system/nginx-health.timer > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/nginx_health.timer > /dev/null << 'EOF'
 [Unit]
 Description=Run nginx health check every 2 minutes
 
@@ -85,25 +85,25 @@ EOF
 sudo systemctl daemon-reload
 
 sudo systemctl enable autoscaler.timer
-sudo systemctl enable nginx-health.timer
+sudo systemctl enable nginx_health.timer
 
 sudo systemctl start autoscaler.timer
-sudo systemctl start nginx-health.timer
+sudo systemctl start nginx_health.timer
 
 echo ""
 echo "=== Services Installed ==="
 echo ""
 echo "Timers:"
-sudo systemctl list-timers --all | grep -E "(autoscaler|nginx-health|NEXT)"
+sudo systemctl list-timers --all | grep -E "(autoscaler|nginx_health|NEXT)"
 echo ""
 echo "Status:"
 sudo systemctl status autoscaler.timer --no-pager 2>/dev/null | head -5
-sudo systemctl status nginx-health.timer --no-pager 2>/dev/null | head -5
+sudo systemctl status nginx_health.timer --no-pager 2>/dev/null | head -5
 echo ""
 echo "Logs:"
 echo "  sudo journalctl -u autoscaler.service -f"
-echo "  sudo journalctl -u nginx-health.service -f"
-echo "  tail -f /var/log/nginx-health.log"
+echo "  sudo journalctl -u nginx_health.service -f"
+echo "  tail -f /var/log/nginx_health.log"
 echo ""
 echo "Reload nginx to activate healthz endpoint:"
 echo "  sudo nginx -t && sudo systemctl reload nginx"

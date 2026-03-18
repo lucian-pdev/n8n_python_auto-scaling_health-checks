@@ -1,6 +1,6 @@
 # N8N Python Executor
 
-A production-ready FastAPI-based Python execution service designed for n8n workflow automation. Features horizontal scaling with queue-based n8n workers, automatic SSL provisioning, nginx reverse proxy, systemd-based autoscaling, and comprehensive monitoring with Prometheus and Grafana.
+A FastAPI-based Python execution service designed for n8n workflow automation. Features horizontal scaling with queue-based n8n workers, automatic SSL provisioning, nginx reverse proxy, systemd-based autoscaling, and comprehensive monitoring with Prometheus and Grafana.
 
 ---
 
@@ -87,7 +87,7 @@ A production-ready FastAPI-based Python execution service designed for n8n workf
 | **nginx** | SSL termination, reverse proxy, static health endpoint | Host systemd |
 | **certbot** | Automatic SSL certificate provisioning | Host |
 | **autoscaler** | Dynamic n8n-worker scaling based on queue depth | `/usr/local/bin/autoscaler.sh` |
-| **nginx-health** | Automatic nginx recovery monitoring | `/usr/local/bin/nginx-health.sh` |
+| **nginx_health** | Automatic nginx recovery monitoring | `/usr/local/bin/nginx_health.sh` |
 
 ---
 
@@ -217,13 +217,10 @@ Exposed via `prometheus-client` in `main.py`:
 
 ## Deployment Guide
 
-WARNING:The N8N_ENCRYPTION_KEY hardcoded, Grafana: admin/admin and n8n: admin/pass
+WARNING: In n8n docker container's settings: admin/pass, N8N_ENCRYPTION_KEY and Grafana's admin/password
 at docker-compose.yml (lines 85 and 102) are PLACEHOLDERS.
 
 MODIFY THEM FOR YOUR ENVIRONMENT.
-
-I do NOT take responsability for any use of these files.
-I do NOT restrict or monetize them.
 
 ### Prerequisites
 
@@ -232,13 +229,15 @@ I do NOT restrict or monetize them.
 - Root or sudo access
 
 ### Quick Deploy (Automatic)
+In the file auto-deploy.sh, change the values for DOMAIN and EMAIL.
 
 ```bash
 # 1. Transfer project to VM
-tar czf n8n.tar.gz n8n-python-project/
+tar czf n8n.tar.gz n8n_python_project_auto-scaling_health-checks/
 scp n8n.tar.gz user@VM_IP:/home/user/
 
 # 2. On VM: run auto-deploy
+tar xf n8n.tar.gz && cd n8n_python_project_auto-scaling_health-checks/
 chmod +x auto-deploy.sh
 sudo ./auto-deploy.sh
 ```
@@ -283,11 +282,12 @@ sudo ufw allow 443/tcp     # HTTPS
 sudo ufw enable
 
 # 7. Install systemd services
+sudo chmod +x ./autoscaler/setup-systemd.sh
 sudo ./autoscaler/setup-systemd.sh
 
 # 8. Verify
 docker compose ps
-sudo systemctl list-timers --all | grep -E "(autoscaler|nginx-health)"
+sudo systemctl list-timers --all | grep -E "(autoscaler|nginx_health)"
 ```
 
 ### Directory Structure
@@ -381,8 +381,8 @@ Ensures nginx stays running and responsive.
 **Management:**
 ```bash
 # View logs
-sudo tail -f /var/log/nginx-health.log
-sudo journalctl -u nginx-health.service -f
+sudo tail -f /var/log/nginx_health.log
+sudo journalctl -u nginx_health.service -f
 
 # Manual test
 curl -f http://localhost/healthz
@@ -393,7 +393,7 @@ curl -f http://localhost/healthz
 | Service | Type | Trigger | Purpose |
 |---------|------|---------|---------|
 | `autoscaler.service` | oneshot | `autoscaler.timer` (30s) | Scale workers |
-| `nginx-health.service` | oneshot | `nginx-health.timer` (2m) | Recover nginx |
+| `nginx_health.service` | oneshot | `nginx_health.timer` (2m) | Recover nginx |
 
 ---
 
@@ -496,7 +496,7 @@ https://n8n.dashboard.com
 | n8n-worker | `docker logs n8n-worker` |
 | All containers | `docker compose logs -f` |
 | Autoscaler | `sudo journalctl -u autoscaler.service -f` |
-| Nginx health | `sudo tail -f /var/log/nginx-health.log` |
+| Nginx health | `sudo tail -f /var/log/nginx_health.log` |
 | Nginx | `sudo journalctl -u nginx -f` |
 
 ---
@@ -550,4 +550,8 @@ This project uses the following third-party software. See their respective repos
 - Grafana is used unmodified via official Docker image. AGPL-3.0 applies if modified or redistributed.
 - n8n's Sustainable Use License restricts high-volume production use; review terms before scaling.
 - Full license texts: https://opensource.org/licenses
+
+I do NOT take responsability for any use of these files.
+I do NOT restrict or monetize them.
+I do NOT employ myself to provide support, maintenance, or updates.
 
