@@ -105,9 +105,9 @@ services:
       - N8N_PROTOCOL=http
       - NODE_ENV=production
       - N8N_HOST=n8n.dashboard.com
-      - WEBHOOK_URL=http://localhost:5678/
+      - WEBHOOK_URL=http://n8n.dashboard.com/ # set to localhost:5678 for testing
       - GENERIC_TIMEZONE=UTC
-      - N8N_SECURE_COOKIE=True
+      - N8N_SECURE_COOKIE=True  # Turn False for local testing
       - N8N_TRUST_PROXY=true   
     volumes:
       - ./n8n-data:/home/node/.n8n
