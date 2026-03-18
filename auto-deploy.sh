@@ -42,18 +42,33 @@ sudo ./autoscaler/setup-systemd.sh
 
 # Configure nginx
 echo "Configuring nginx..."
-sudo cp ./HTTPS/nginx.conf /etc/nginx/sites-available/n8n_grafana.conf
+sed "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx_before_ssl.conf
+sed "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx.conf
+sudo cp ./HTTPS/nginx_before_ssl.conf /etc/nginx/sites-available/n8n_grafana.conf
 sudo ln -sf /etc/nginx/sites-available/n8n_grafana.conf /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default  # Remove default site
+sudo rm -f /etc/nginx/sites-enabled/default
 
 sudo nginx -t && sudo systemctl reload nginx
 
 # SSL certificate
 echo "Obtaining SSL certificate..."
-sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" || {
-    echo "Certbot failed. Check domain points to this server."
-    exit 1
+sudo mkdir -p /var/www/certbot
+sudo certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" \
+    --non-interactive --agree-tos -m "$EMAIL" || {
+    echo "Certbot failed. Trying standalone method..."
+    sudo certbot certonly --standalone -d "$DOMAIN" \
+        --non-interactive --agree-tos -m "$EMAIL" || {
+        echo "Certbot failed completely. Check domain points to this server."
+        exit 1
+    }
 }
+
+# Upgrading HTTP to HTTPSecure
+sudo cp ./HTTPS/nginx.conf /etc/nginx/sites-available/n8n_grafana.conf
+sudo ln -sf /etc/nginx/sites-available/n8n_grafana.conf /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+sudo nginx -t && sudo systemctl reload nginx
 
 # Firewall
 echo "Configuring firewall..."
