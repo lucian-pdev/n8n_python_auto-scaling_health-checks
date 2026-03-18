@@ -125,6 +125,7 @@ services:
       # generate with "openssl rand -hex 32"
       # n8n-main and n8n-workers must have the SAME key
       - GENERIC_TIMEZONE=UTC
+      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
     ports:
       - "127.0.0.1:5678:5678"
     volumes:
@@ -138,7 +139,7 @@ services:
     image: n8nio/n8n:latest
     container_name: n8n-worker
     restart: unless-stopped
-    command: n8n worker
+    command: ["worker", "--concurrency=4"]
     environment:
       - EXECUTIONS_MODE=queue
       - QUEUE_BULL_REDIS_HOST=redis
@@ -146,6 +147,8 @@ services:
       - QUEUE_BULL_REDIS_DB=0
       - QUEUE_BULL_REDIS_PASSWORD=
       - N8N_ENCRYPTION_KEY=a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5
+    networks:
+      - n8n-network
     depends_on:
       - redis
 
