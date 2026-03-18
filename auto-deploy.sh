@@ -27,8 +27,8 @@ sudo groupadd -f docker
 sudo usermod -aG docker "$USER"
 
 echo "Building and starting services..."
-docker compose build
-docker compose up -d
+sudo docker compose build
+sudo docker compose up -d
 
 # Fix permissions AFTER containers create directories
 echo "Fixing permissions..."
@@ -42,8 +42,8 @@ sudo ./autoscaler/setup-systemd.sh
 
 # Configure nginx
 echo "Configuring nginx..."
-sed "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx_before_ssl.conf
-sed "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx.conf
+sed -i "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx_before_ssl.conf
+sed -i "s/n8n.dashboard.com/$DOMAIN/g" ./HTTPS/nginx.conf
 sudo cp ./HTTPS/nginx_before_ssl.conf /etc/nginx/sites-available/n8n_grafana.conf
 sudo ln -sf /etc/nginx/sites-available/n8n_grafana.conf /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
