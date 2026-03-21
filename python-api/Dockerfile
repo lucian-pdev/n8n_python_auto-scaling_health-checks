@@ -10,9 +10,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY main.py .
-RUN mkdir -p /app/scripts
+COPY wrapper.py .
+COPY packagemanager.py .
+COPY exceptions.py .
+COPY worker.py .
+
+RUN mkdir -p /app/scripts /app/venvs
 
 ENV SCRIPTS_DIR=/app/scripts
+ENV VENV_BASE=/app/venvs
 
 # Expose port
 EXPOSE 8000

@@ -135,7 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+# .env      # there are .env files for docker-compose.yml to switch from prod and test environments
 .envrc
 .venv
 env/

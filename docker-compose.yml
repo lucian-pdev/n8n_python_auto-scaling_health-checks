@@ -1,11 +1,27 @@
-version: "3.8"
+# version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=n8n_password
+      - POSTGRES_DB=n8n
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - n8n-network
+    restart: unless-stopped
+    
   redis:
     image: redis:latest
     container_name: redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: >
+      sh -c "redis-server 
+      --appendonly yes
+      ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}"
     volumes:
      - redis-data:/data
     networks:
@@ -19,8 +35,8 @@ services:
     container_name: python-api
     volumes:
       - ./scripts:/app/scripts:ro
-    # ports:
-    #   - "8000:8000"
+    ports:
+      - ${PYTHON_API_PUBLISHED_PORT:-127.0.0.1:8000:8000}
     networks:
       - n8n-network
       - monitoring
@@ -30,7 +46,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   # Prometheus Metrics Server
   prometheus:
@@ -42,8 +58,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    # ports:
-    #   - "9090:9090"
+    ports:
+      - ${PROMETHEUS_PUBLISHED_PORT:-127.0.0.1:9090:9090}
     networks:
       - monitoring
     restart: unless-stopped
@@ -53,13 +69,13 @@ services:
     image: grafana/grafana:main-ubuntu
     container_name: grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-    # ports:
-    #   - "3000:3000"
+    ports:
+      - ${GRAFANA_PUBLISHED_PORT:-127.0.0.1:3000:3000}
     networks:
       - monitoring
     restart: unless-stopped
@@ -76,8 +92,8 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    # ports:
-    #   - "8080:8080"
+    ports:
+      - ${CADVISOR_PUBLISHED_PORT:-127.0.0.1:8080:8080}
     networks:
       - monitoring
     restart: unless-stopped
@@ -94,8 +110,8 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
-    # ports:
-    #   - "9100:9100"
+    ports:
+      - ${NODE_EXPORTER_PUBLISHED_PORT:-127.0.0.1:9100:9100}
     networks:
       - monitoring
     restart: unless-stopped
@@ -109,25 +125,31 @@ services:
     environment:
       - NODE_ENV=production
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=pass
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-pass}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=https
-      - N8N_HOST=n8n.dashboard.com
-      - WEBHOOK_URL=https://n8n.dashboard.com  # replace https://n8n.dashboard.com | https://localhost:5678/
-      - EXECUTIONS_MODE=queue               # Controls whether executions run in the main process or a subprocess.
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
+      - N8N_HOST=${N8N_HOST:-n8n.dashboard.com}
+      - WEBHOOK_URL=${WEBHOOK_URL:-https://n8n.dashboard.com}
+      - EXECUTIONS_MODE=queue       # Controls whether executions run in the main process or a subprocess.
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
-      - QUEUE_BULL_REDIS_DB=0               # You can isolate n8n by using a different DB number.
-      - QUEUE_BULL_REDIS_PASSWORD=          # Leave empty if Redis has no password like now
-      - N8N_SECURE_COOKIE=True
-      - N8N_ENCRYPTION_KEY=a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5
-      # generate with "openssl rand -hex 32"
+      - QUEUE_BULL_REDIS_DB=0     # You can isolate n8n by using a different DB number.
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}   # Leave empty if Redis has no password
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-True}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5}
+      # generated with "openssl rand -hex 32"
       # n8n-main and n8n-workers must have the SAME key
       - GENERIC_TIMEZONE=UTC
       - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_password
     ports:
-      - "127.0.0.1:5678:5678"
+      - ${N8N_PUBLISHED_PORT:-127.0.0.1:5678:5678}
     volumes:
       - n8n-data:/home/node/.n8n
     networks:
@@ -145,18 +167,26 @@ services:
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=0
-      - QUEUE_BULL_REDIS_PASSWORD=
-      - N8N_ENCRYPTION_KEY=a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_password
     networks:
       - n8n-network
     depends_on:
       - redis
+      - n8n-main
 
 volumes:
   prometheus_data:
   grafana_data:
   redis-data:
   n8n-data:
+  postgres-data:
 
 networks:
   n8n-network:

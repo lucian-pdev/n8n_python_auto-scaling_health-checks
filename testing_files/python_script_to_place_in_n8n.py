@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 country_calling_codes = {
     'AL': '355', 'AD': '376', 'AT': '43', 'BE': '32', 'BG': '359', 'HR': '385', 'CY': '357',
     'CZ': '420', 'DK': '45', 'EE': '372', 'FI': '358', 'FR': '33', 'DE': '49', 'GR': '30',
@@ -49,30 +51,51 @@ def normalize_mobile(mobile, country_code):
 
     return '+' + dialing_code + digits
 
-
+# Process the data from n8n
+# Expected structure: data comes from webhook payload
 new_items = []
+
+# n8n sends the webhook body directly in data
+# Common n8n pattern: body is in data["body"] or directly in data
+items = data.get("items", [data]) if isinstance(data, dict) else [{"json": {"body": {"payload": data}}}]
+
 for item in items:
     try:
-        person = item['json']['body']['payload']['person']
+        # Handle different n8n payload structures
+        if "json" in item:
+            person = item["json"].get("body", {}).get("payload", {}).get("person", {})
+        else:
+            # Direct payload structure
+            person = item.get("person", item)
 
-        # Title-case names
-        person["first_name"] = str(person.get("first_name", "")).title()
-        person["middle_name"] = str(person.get("middle_name", "")).title()
-        person["last_name"] = str(person.get("last_name", "")).title()
+        # Title-case names (handle None/empty)
+        first_name = str(person.get("first_name") or "").strip()
+        middle_name = str(person.get("middle_name") or "").strip()
+        last_name = str(person.get("last_name") or "").strip()
 
-        mobile = person.get('mobile')
-        phone = person.get('phone')
-        country_code = person.get('primary_address', {}).get('country_code', '')
+        person["first_name"] = first_name.title() if first_name else ""
+        person["middle_name"] = middle_name.title() if middle_name else ""
+        person["last_name"] = last_name.title() if last_name else ""
+
+        mobile = person.get("mobile")
+        phone = person.get("phone")
+        country_code = person.get("primary_address", {}).get("country_code", "")
 
         # Use phone if mobile is empty
-        if not mobile or str(mobile).strip() == '':
+        if not mobile or str(mobile).strip() == "":
             mobile = phone
 
-        person['mobile'] = normalize_mobile(mobile, country_code)
+        person["mobile"] = normalize_mobile(mobile, country_code)
+
+        # Update back in item structure
+        if "json" in item and "body" in item["json"] and "payload" in item["json"]["body"]:
+            item["json"]["body"]["payload"]["person"] = person
 
     except Exception:
+        # Silently continue on individual item errors
         pass
 
     new_items.append(item)
 
-    return new_items
+# MUST define result variable - this is returned to n8n
+result = new_items
