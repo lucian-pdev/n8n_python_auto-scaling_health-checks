@@ -6,7 +6,7 @@
 |------|-----------|--------|----------|----------------|
 | 1 | External System | HTTP POST to `https://n8n.dashboard.com/webhook/PersonCreated` | Network RTT | Raw JSON payload |
 | 2 | nginx | SSL termination, route to localhost:5678 | <1ms | None |
-| 3 | n8n-main | Receive webhook, trigger workflow, queue execution | ~50ms | Parse to n8n nodes |
+| 3 | n8n-main | Receive webhook, trigger workflow, queue execution in Redis, loads job data in PostGreSQL | ~50ms | Parse to n8n nodes |
 | 4 | redis | Store job in Bull queue (list: `bull:queueName:wait`) | <1ms | Serialized job |
 | 5 | n8n-worker | Pick job from queue, process workflow | Variable | Execute n8n nodes |
 | 6 | n8n-worker | HTTP Request node → POST to `http://python-api:8000/execute` | Network RTT | JSON: `{data, code_file_name}` |
@@ -21,7 +21,7 @@
 | 15 | python-api (worker) | Parse output, detect corruption, build response dict | <1ms | Output dict with status |
 | 16 | python-api (main) | Return HTTP 200 (success) or 202 (retrying) | <1ms | JSON response |
 | 17 | n8n-worker | Receive result, continue workflow | Variable | n8n node output |
-| 18 | n8n-main | Complete execution, log to n8n-data | ~10ms | Execution saved |
+| 18 | n8n-main | Complete execution, persist to Postgres DB, log local state | ~10ms | Execution record saved, workflow variables committed |
 
 **Total Typical Latency:** 100-500ms (warm venv, simple script)
 

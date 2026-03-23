@@ -51,30 +51,4 @@ pm._cleanup_old_venvs(max_age_days=1)
 
 ---
 
-## NOTICE
-
-This project uses the following third-party software. See their respective repositories for full license texts.
-
-### Python Dependencies
-
-| Package | License |
-|---------|---------|
-| fastapi | MIT |
-| uvicorn | BSD-3-Clause |
-| pydantic | MIT |
-| prometheus-client | Apache-2.0 |
-
-### Container Images
-
-| Component | License |
-|-----------|---------|
-| n8n | [Fair-code](https://docs.n8n.io/reference/license/) |
-| Redis | BSD-3-Clause |
-| Prometheus | Apache-2.0 |
-| Grafana | AGPL-3.0 |
-| cadvisor | Apache-2.0 |
-| node-exporter | Apache-2.0 |
-
----
-
 **End of README**

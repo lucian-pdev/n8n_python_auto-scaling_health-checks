@@ -5,8 +5,8 @@ services:
     image: postgres:16-alpine
     container_name: postgres
     environment:
-      - POSTGRES_USER=n8n
-      - POSTGRES_PASSWORD=n8n_password
+      - POSTGRES_USER=${POSTGRES_USERNAME:-n8n}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n}
       - POSTGRES_DB=n8n
     volumes:
       - postgres-data:/var/lib/postgresql/data

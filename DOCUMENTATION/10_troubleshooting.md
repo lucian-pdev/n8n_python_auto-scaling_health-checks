@@ -8,6 +8,7 @@
 | `permission denied` on scripts | Wrong ownership | `sudo chown -R 1000:1000 scripts/` |
 | SSL certificate fails | DNS not propagated | Verify A record, wait for TTL |
 | `n8n-data` permission errors | Container UID mismatch | `sudo chown -R 1000:1000 n8n-data/` |
+| `n8n` database connection refused | PostgreSQL not ready | `docker compose logs postgres` |
 
 ### Service Issues
 
@@ -18,6 +19,8 @@
 | ImportError in script | Missing `# requires` | Add dependency declaration |
 | Grafana no data | Prometheus not scraping | Check `http://VM_IP:9090/targets` all UP |
 | Redis connection errors | Redis container down | `docker compose restart redis` |
+| n8n workflows not loading | DB sync pending | Check `docker compose logs n8n-main` |
+| n8n credentials missing | Secrets not synced | Check `docker compose logs n8n-worker` |
 
 ### Scaling Issues
 
@@ -37,15 +40,19 @@
 
 ### Log Locations
 
-| Service | Command |
-|---------|---------|
-| python-api | `docker compose logs -f python-api` |
-| n8n-main | `docker compose logs -f n8n-main` |
-| n8n-worker | `docker compose logs -f n8n-worker` |
-| autoscaler | `sudo journalctl -u autoscaler.service -f` |
-| nginx health | `sudo tail -f /var/log/nginx_health.log` |
-| github sync | `sudo journalctl -u github_sync.service -f` |
-| nginx | `sudo tail -f /var/log/nginx/access.log` |
+| Service | Command | Description |
+|---------|---------|-------------|
+| python-api | `docker compose logs -f python-api` | FastAPI logs, script execution errors |
+| n8n-main | `docker compose logs -f n8n-main` | Workflow sync, DB connection, queue events |
+| n8n-worker | `docker compose logs -f n8n-worker` | Execution logs, Redis queue processing |
+| autoscaler | `sudo journalctl -u autoscaler.service -f` | Scaling decisions, queue depth metrics |
+| nginx health | `sudo tail -f /var/log/nginx_health.log` | Health check probe results |
+| github sync | `sudo journalctl -u github_sync.service -f` | Repository sync events |
+| nginx | `sudo tail -f /var/log/nginx/access.log` | HTTP requests, status codes |
+| postgres | `docker compose logs -f postgres` | DB queries, connection errors, replication |
+| redis | `docker compose logs -f redis` | Queue events, memory usage, persistence |
+| node-exporter | `sudo tail -f /var/log/syslog \| grep node_exporter` | Host resource usage |
+| prometheus | `sudo tail -f /var/log/syslog \| grep prometheus` | Scrape errors, target status |
 
 ### Web Browser Test URLs
 
@@ -71,3 +78,55 @@ Health Check	http://127.0.0.1:8000/health	GET	        Check Python API status
 List Scripts	http://127.0.0.1:8000/scripts	GET	        See available Python scripts
 Metrics	      http://127.0.0.1:8000/metrics	    GET	        Prometheus-format metrics
 Execute Script	http://127.0.0.1:8000/execute	POST	    Execute a Python script
+
+### Trace & Diagnostic Methods
+
+#### 1. Docker Inspect (Deep Dive)
+```bash
+# Inspect container for environment variables and mounts
+docker inspect n8n-main --format '{{json .Config.Env}}'
+docker inspect n8n-main --format '{{json .Mounts}}'
+
+# Inspect for network connections
+docker inspect n8n-main --format '{{json .NetworkSettings.Networks}}'
+```
+
+#### 2. Prometheus Metrics Querying
+Use `http://VM_IP:9090/graph` to query specific metrics:
+- `n8n_queue_length`: Current queue depth
+- `n8n_active_executions`: Number of running workers
+- `python_api_execution_duration_seconds`: Script execution time
+- `node_cpu_seconds_total`: Host CPU usage per core
+
+#### 3. n8n Internal Logs
+- **Workflow Execution Logs**: Check `n8n-main` logs for "Workflow executed" events.
+- **Credential Errors**: Look for "Invalid credentials" in `n8n-worker` logs.
+- **Queue Events**: Look for "Job added" or "Job processed" in `n8n-worker` logs.
+
+#### 4. PostgreSQL Querying
+Access the database directly to trace workflow states:
+```bash
+docker exec -it n8n-main psql -U postgres -d n8n -c "SELECT * FROM \"executions\" ORDER BY \"createdAt\" DESC LIMIT 10;"
+```
+
+#### 5. Redis Key Inspection
+Check Redis keys directly:
+```bash
+docker exec -it redis redis-cli keys "*n8n*"
+docker exec -it redis redis-cli get "n8n:queue:default:pending"
+```
+
+#### 6. System Resource Monitoring
+- **CPU/Memory**: `docker stats --no-stream`
+- **Disk I/O**: `iostat -x 1`
+- **Network**: `iftop` or `nethogs`
+
+#### 7. Nginx Access Logs (Detailed)
+```bash
+# Filter by status code
+sudo grep "502" /var/log/nginx/access.log
+sudo grep "POST /execute" /var/log/nginx/access.log
+
+# Check for slow requests (> 5s)
+sudo awk '{print $9, $10}' /var/log/nginx/access.log | awk '$1 > 5 {print}'
+```

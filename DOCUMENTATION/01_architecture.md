@@ -31,12 +31,17 @@
                    │   :5678     │          │   :3000     │          │  endpoint   │
                    └──────┬──────┘          └─────────────┘          └─────────────┘
                           │
-                          ▼ Redis Queue (Bull)
-                   ┌─────────────┐
-                   │    redis    │
-                   │    :6379    │
-                   └──────┬──────┘
                           │
+                          ┌─────────────────────────────┐
+                          │                             │                         
+                          |                             | 
+                          ▼ Redis Queue (Bull)          ▼
+                   ┌─────────────┐               ┌─────────────┐
+                   │    redis    │               │  PostGreSQL │
+                   │ TASK queue  │               │  TASK data  │
+                   │    :6379    │               │             │
+                   └──────┬──────┘               └──────┬──────┘
+                          ┼─────────────────────────────┘
                           ▼
                    ┌─────────────┐
                    │ n8n-worker  │◄── Autoscaler (systemd, every 30s)
@@ -46,27 +51,27 @@
                           ▼ HTTP POST
                    ┌─────────────┐
                    │  python-api │◄── Prometheus (scrape :8000/metrics)
-                   │   :8000     │◄── Grafana dashboards
+                   │:8000 FastAPI│◄── Grafana dashboards
                    └──────┬──────┘    │
-                          │            │
+                          │           │
                    ┌──────┴──────┐    │
-                   │   Worker    │    │
+                   │  Py Worker  │    │
                    │   Pool (4)  │    │
                    └──────┬──────┘    │
-                          │            │
+                          │           │
                    ┌──────┴──────┐    │
                    │  Package    │    │
                    │   Manager   │    │
                    │ (venv per   │    │
                    │  script)    │    │
                    └──────┬──────┘    │
-                          │            │
+                          │           │
                    ┌──────┴──────┐    │
                    │   wrapper   │    │
                    │  (subprocess│    │
                    │   isolate)  │    │
                    └──────┬──────┘    │
-                          │            │
+                          │           │
                    ┌──────┴──────┐    │
                    │   User      │    │
                    │   Script    │    │
@@ -77,6 +82,16 @@ Monitoring Stack (monitoring network):
 ├── Prometheus (:9090) ← cadvisor (:8080), node-exporter (:9100)
 └── Grafana (:3000)
 ```
+
+Data Persistence Layer (n8n-network):
+├── PostgreSQL (Port 5432)
+│   ├── Stores n8n Workflow Definitions
+│   ├── Stores Execution History & Logs
+│   ├── Stores User Credentials & Secrets
+│   └── Stores Workflow Variables
+└── n8n-data (Local Volume)
+    ├── Stores Node State
+    └── Stores Local Cache
 
 **Key Design Decisions:**
 - **Queue-based execution**: n8n runs in `EXECUTIONS_MODE=queue` with Redis as broker, enabling horizontal scaling of workers
