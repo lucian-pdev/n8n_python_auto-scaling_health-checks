@@ -6,6 +6,22 @@ set -e
 DOMAIN="n8n.dashboard.com"      # CHANGE THIS
 EMAIL="your-email@example.com"  # CHANGE THIS
 
+NDIRS=( 
+    prometheus-data
+    grafana-data
+#   redis-data
+    n8n-data
+#   postgres-data
+    scripts
+)
+
+# Exit if not run from project root (where this script resides)
+if [[ ! -f "$PWD/auto-deploy.sh" ]]; then
+    echo "ERROR: Must run auto-deploy.sh from the project root directory."
+    echo "Current directory: $PWD"
+    exit 1
+fi
+
 SEPARATOR="=================================================="
 
 echo "$SEPARATOR"
@@ -30,6 +46,11 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin python3-pip
 
+# Ensuring the directories exist and are owned by USER before docker creates them as ROOT out of necessity
+for d in "${NDIRS[@]}"; do
+    mkdir -p "$d"
+done
+
 sudo systemctl enable --now docker
 sudo groupadd -f docker
 sudo usermod -aG docker "$USER"
@@ -40,9 +61,9 @@ echo "$SEPARATOR"
 sudo docker compose build
 sudo docker compose up -d
 
-# Fix permissions AFTER containers create directories
+# Ensure permissions are good for directories needed by containers
 echo "$SEPARATOR"
-echo "Fixing permissions..."
+echo "Ensuring permissions..."
 echo "$SEPARATOR"
 sudo chown -R 1000:1000 n8n-data/ 2>/dev/null || true
 sudo chown -R 1000:1000 scripts/ 2>/dev/null || true

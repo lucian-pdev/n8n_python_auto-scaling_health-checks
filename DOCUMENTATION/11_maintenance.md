@@ -46,8 +46,8 @@ pm._cleanup_old_venvs(max_age_days=1)
 |------|----------|---------------|
 | n8n workflows | `./n8n-data/` | `tar czf backup-n8n-$(date +%Y%m%d).tar.gz n8n-data/` |
 | scripts | `./scripts/` or GitHub repo | `git push` or `tar czf scripts.tar.gz scripts/` |
-| grafana dashboards | `./grafana_data/` | Export via UI or volume backup |
-| prometheus data | `./prometheus_data/` | Optional (metrics ephemeral) |
+| grafana dashboards | `./grafana-data/` | Export via UI or volume backup |
+| prometheus data | `./prometheus-data/` | Optional (metrics ephemeral) |
 
 ---
 

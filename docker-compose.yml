@@ -57,7 +57,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
+      - prometheus-data:/prometheus
     ports:
       - ${PROMETHEUS_PUBLISHED_PORT:-127.0.0.1:9090:9090}
     networks:
@@ -73,7 +73,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
-      - grafana_data:/var/lib/grafana
+      - grafana-data:/var/lib/grafana
     ports:
       - ${GRAFANA_PUBLISHED_PORT:-127.0.0.1:3000:3000}
     networks:
@@ -146,8 +146,8 @@ services:
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
-      - DB_POSTGRESDB_USER=n8n
-      - DB_POSTGRESDB_PASSWORD=n8n_password
+      - DB_POSTGRESDB_USER=${POSTGRES_USERNAME:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n}
     ports:
       - ${N8N_PUBLISHED_PORT:-127.0.0.1:5678:5678}
     volumes:
@@ -173,8 +173,8 @@ services:
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
-      - DB_POSTGRESDB_USER=n8n
-      - DB_POSTGRESDB_PASSWORD=n8n_password
+      - DB_POSTGRESDB_USER=${POSTGRES_USERNAME:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n}
     networks:
       - n8n-network
     depends_on:
@@ -182,8 +182,8 @@ services:
       - n8n-main
 
 volumes:
-  prometheus_data:
-  grafana_data:
+  prometheus-data:
+  grafana-data:
   redis-data:
   n8n-data:
   postgres-data:

@@ -7,7 +7,7 @@ set -e
 # === CONFIGURATION - EDIT THESE ===
 SCRIPTS_REPO="https://github.com/your-org/vetted-scripts.git"  # Full HTTPS URL
 SCRIPTS_BRANCH="main"                                          # Branch to track
-SCRIPTS_DIR="/app/scripts"                                     # Where to clone/pull
+SCRIPTS_DIR="$(pwd)/scripts"                                     # Where to clone/pull
 GITHUB_TOKEN=""                                                # Optional: for private repos
 SYNC_INTERVAL_MINUTES="5"                                      # How often to sync
 # =================================
@@ -144,15 +144,17 @@ set -e
 
 REPO="${SCRIPTS_REPO:-}"
 BRANCH="${SCRIPTS_BRANCH:-main}"
-TARGET="${SCRIPTS_DIR:-/app/scripts}"
+TARGET="${SCRIPTS_DIR}"
 
 if [ -z "$REPO" ]; then
     echo "$(date): ERROR: SCRIPTS_REPO not set" >&2
     exit 1
 fi
 
-# Ensure target directory exists
-mkdir -p "$TARGET"
+# # Ensure target directory exists
+# if [ ! -d "$TARGET" ]; then
+#     mkdir -p "$TARGET"
+# fi
 
 if [ -d "$TARGET/.git" ]; then
     # Existing repo: fetch and reset to ensure clean state

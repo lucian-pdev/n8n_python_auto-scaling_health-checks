@@ -8,50 +8,6 @@ WORK IN PROGRESS!!!
 
 ## Full Documentation is avaiable in the DOCUMENTATION/ directory.
 
-Must edit to account for:
-- adding postgres
-
-- the new workflow with postgress (run a logical simulation as far as needed, both sent and receive, use present data for systems not changed to abstract and focus on changes at the Data Flow in file 03_...)
-
-- in-depth settings of n8n nodes related the python container
-
-- the usage of docker logs and other verification commands for troubleshooting investigation
-
-- n8n node setups and links to endpoints
-
-- test the github sync of the scripts/ dir. Note to self: remember that docker COPIES the files from host's scripts/ when starting the container.
--> https://www.geeksforgeeks.org/devops/copying-files-to-and-from-docker-containers/#how-to-docker-copy-files-from-host-to-container-a-stepbystep-guide
-How to Mount a Host Directory to a Docker Container?
-
-The following command helps in mounting a host directory to a docker container:
-
- docker run -v /path/on/host:/path/in/container image_name
-
-    Here, replace <Host path to mount> with your host path mounting directory and <name of the container> with your wishing container's path. 
-
-Example
-
-The following command is an example of mounting the host directory with the container directory:
-
-docker run -v /myfold:/tmp --name  mycontainer1 centos
-
-INFO:
- Should you run docker run -v from the shell, or bake it into the Dockerfile?
-✔️ Short answer:
-
-You MUST do it from the shell (or docker-compose).
-You CANNOT bake a bind mount into a Dockerfile.
-Why?
-
-Because:
-
-    Dockerfile describes the image, not the runtime environment.
-
-    Bind mounts (-v) are runtime-only configuration.
-
-    Dockerfile has no instruction that can define a host path to mount.
-
-    Even if you tried to hack it, the image build context cannot reference arbitrary host paths.
 
 ## NOTICE
 
