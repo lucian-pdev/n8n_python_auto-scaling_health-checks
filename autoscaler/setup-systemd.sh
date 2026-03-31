@@ -142,7 +142,7 @@ WantedBy=timers.target
 EOF
 
 # === GITHUB SYNC SCRIPT ===
-sudo tee /usr/local/bin/github_sync.sh > /dev/null << SCRIPT
+sudo tee /usr/local/bin/github_sync.sh > /dev/null << 'SCRIPT'
 #!/bin/bash
 
 # GitHub sync script - clone or pull vetted scripts
