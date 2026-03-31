@@ -59,25 +59,30 @@
 Replace http://192.168.1.100/ (Local LAN) OR http://127.0.0.1/ (host machine) accordingly.
 
 Primary Services (via Nginx - Port 80)
-Service	                URL	                  Description
-n8n Dashboard	http://192.168.1.100/	        Main n8n workflow automation interface
-Grafana	        http://192.168.1.100/grafana/   Monitoring dashboards and metrics visualization
-Health Check	http://192.168.1.100/healthz	Returns "healthy" if Nginx is working
+| Service	| URL | Description |
+|---------|---------|-------------|
+| n8n Dashboard | http://192.168.1.100/	| Main n8n workflow automation interface |
+| Grafana | http://192.168.1.100/grafana/ | Monitoring dashboards and metrics visualization |
+| Health Check | http://192.168.1.100/healthz | Returns "healthy" if Nginx is working |
 
 Direct Service Access (Bypassing Nginx)
-Service	          URL	                      Credentials	            Description
-n8n Direct	http://127.0.0.1:5678/	        admin / pass (default)	Direct access to n8n (bypasses nginx)
-Grafana Direct	http://127.0.0.1:3000/	    admin / admin (default)	Direct access to Grafana
-Python API	http://127.0.0.1:8000/	        N/A	                    FastAPI Python execution service
-Prometheus	http://127.0.0.1:9090/	        N/A	                    Metrics collection and querying
-cAdvisor	  http://127.0.0.1:8080/	    N/A	                    Container metrics and resource usage
+
+| Service | URL | Credentials | Description |
+|---------|-----|-------------|-------------|
+| n8n Direct | http://127.0.0.1:5678/ | admin / pass (default) | Direct access to n8n (bypasses nginx) |
+| Grafana Direct | http://127.0.0.1:3000/ | admin / admin (default) | Direct access to Grafana |
+| Python API | http://127.0.0.1:8000/ | N/A | FastAPI Python execution service |
+| Prometheus | http://127.0.0.1:9090/ | N/A | Metrics collection and querying |
+| cAdvisor | http://127.0.0.1:8080/ | N/A | Container metrics and resource usage |
 
 Python API Endpoints (for testing)
-Endpoint	        URL	                        Method	    Purpose
-Health Check	http://127.0.0.1:8000/health	GET	        Check Python API status
-List Scripts	http://127.0.0.1:8000/scripts	GET	        See available Python scripts
-Metrics	      http://127.0.0.1:8000/metrics	    GET	        Prometheus-format metrics
-Execute Script	http://127.0.0.1:8000/execute	POST	    Execute a Python script
+
+| Endpoint | URL | Method | Purpose |
+|----------|-----|--------|---------|
+| Health Check | http://127.0.0.1:8000/health | GET | Check Python API status |
+| List Scripts | http://127.0.0.1:8000/scripts | GET | See available Python scripts |
+| Metrics | http://127.0.0.1:8000/metrics | GET | Prometheus-format metrics |
+| Execute Script | http://127.0.0.1:8000/execute | POST | Execute a Python script |
 
 ### Trace & Diagnostic Methods
 
