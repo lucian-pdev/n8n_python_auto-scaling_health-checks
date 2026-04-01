@@ -5,10 +5,11 @@
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `docker: command not found` | Docker not installed | `sudo apt install docker-ce` |
-| `permission denied` on scripts | Wrong ownership | `sudo chown -R 1000:1000 scripts/` |
+| `permission denied` on scripts | Wrong ownership | `sudo chown 1000:1000 scripts/` |
 | SSL certificate fails | DNS not propagated | Verify A record, wait for TTL |
 | `n8n-data` permission errors | Container UID mismatch | `sudo chown -R 1000:1000 n8n-data/` |
 | `n8n` database connection refused | PostgreSQL not ready | `docker compose logs postgres` |
+| Permission denied in python-api | Container user mismatch | Check: container runs as root, scripts 644, mount :ro |
 
 ### Service Issues
 
@@ -134,4 +135,15 @@ sudo grep "POST /execute" /var/log/nginx/access.log
 
 # Check for slow requests (> 5s)
 sudo awk '{print $9, $10}' /var/log/nginx/access.log | awk '$1 > 5 {print}'
+```
+
+#### 8. Script Ownership Verification
+```bash
+# Check directory vs file ownership (should be split)
+ls -la scripts/          # dir: vagrant:vagrant, files: root:root
+stat -c "%U:%G" scripts/ # 1000:1000 expected for directory
+
+# Verify container can read
+docker exec python-api ls -la /app/scripts/
+docker exec python-api cat /app/scripts/test.py  # Should succeed
 ```

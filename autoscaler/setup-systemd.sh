@@ -13,7 +13,7 @@ set -e
 
 # === CONFIGURATION - Testing ===
 SCRIPTS_REPO="https://github.com/lucian-pdev/n8n_python_auto-scaling_health-checks.git"  # Full HTTPS URL
-SCRIPTS_BRANCH="main"                                          # Branch to track
+SCRIPTS_BRANCH="scripts"                                          # Branch to track
 SCRIPTS_DIR="$(pwd)/scripts"                                     # Where to clone/pull
 GITHUB_TOKEN=""                                                # Optional: for private repos
 SYNC_INTERVAL_MINUTES="5"                                      # How often to sync
@@ -46,7 +46,7 @@ sudo apt-get update && sudo apt-get install -y bc jq git
 
 # Create scripts directory
 sudo mkdir -p "$SCRIPTS_DIR"
-sudo chown "$(whoami)":"$(whoami)" "$SCRIPTS_DIR" 2>/dev/null || true
+# sudo chown 1000:1000 "$SCRIPTS_DIR" 2>/dev/null || true
 
 # === AUTOSCALER SERVICE ===
 sudo tee /etc/systemd/system/autoscaler.service > /dev/null << 'EOF'
@@ -159,36 +159,37 @@ if [ -z "$REPO" ]; then
 fi
 
 # Ensure target directory exists
-if [ ! -d "$TARGET" ]; then
-    mkdir -p "$TARGET"
-else
-    # Fresh clone - handle non-empty target
-    TEMP_DIR=$(mktemp -d)
-    echo "$(date): Cloning $REPO to temp..."
-    git clone --branch "$BRANCH" --single-branch "$REPO" "$TEMP_DIR"
-    
-    echo "$(date): Syncing to $TARGET..."
-    # Remove existing files but keep directory
-    rm -rf "$TARGET"/*
-    # Copy new files
-    cp -r "$TEMP_DIR"/* "$TARGET"/
-    rm -rf "$TEMP_DIR"
-fi
-
 if [ -d "$TARGET/.git" ]; then
-    # Existing repo: fetch and reset to ensure clean state
+    # Existing repo: pull
     echo "$(date): Pulling latest from $BRANCH..."
     cd "$TARGET"
     git fetch origin "$BRANCH"
     git reset --hard "origin/$BRANCH"
+elif [ -d "$TARGET" ] && [ "$(ls -A "$TARGET" 2>/dev/null)" ]; then
+    # Directory exists with files but no git
+    echo "$(date): Syncing to existing directory..."
+    TEMP_DIR=$(mktemp -d)
+    git clone --branch "$BRANCH" --single-branch "$REPO" "$TEMP_DIR" --quiet
+    rm -rf "$TARGET"/*
+    cp -r "$TEMP_DIR"/* "$TARGET"/
+    rm -rf "$TEMP_DIR"
 else
-    # Fresh clone
+    # Fresh clone to empty/non-existent directory
     echo "$(date): Cloning $REPO to $TARGET..."
     git clone --branch "$BRANCH" --single-branch "$REPO" "$TARGET"
 fi
 
 SCRIPT_COUNT=$(find "$TARGET" -name "*.py" -type f 2>/dev/null | wc -l)
 echo "$(date): Sync complete. $SCRIPT_COUNT Python scripts available."
+
+# Fix ownership if not 1000:1000 (USER)
+CURRENT_OWNER=$(stat -c "%u:%g" "$TARGET" 2>/dev/null || echo "0:0")
+if [ "$CURRENT_OWNER" != "1000:1000" ]; then
+    echo "$(date): Fixing ownership from $CURRENT_OWNER to 1000:1000..."
+    chown -R 1000:1000 "$TARGET" 2>/dev/null || true
+else
+    echo "$(date): Ownership already correct (1000:1000)"
+fi
 
 # Optional: notify python-api to refresh (if health endpoint supports it)
 # curl -sf http://localhost:8000/health || true

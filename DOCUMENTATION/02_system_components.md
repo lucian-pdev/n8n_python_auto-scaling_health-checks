@@ -9,6 +9,7 @@
 | **redis** | Bull queue broker for n8n executions | 6379 | `redis:latest` | n8n-network | redis-data:/data |
 | **python-api** | FastAPI Python execution service with venv management | 8000 | Build: `./python-api/Dockerfile` | n8n-network, monitoring | ./scripts:/app/scripts:ro |
 
+> **Note:** Scripts directory is owned by UID 1000, files owned by root (synced from GitHub), container runs as root with RO mount.
 > **Note:** n8n-worker has no exposed ports; it communicates via Redis and HTTP to python-api internally.
 
 ### Monitoring & Observability
@@ -61,3 +62,21 @@
 **Venv Naming:** `hashlib.sha256("|".join(sorted(reqs))).hexdigest()[:16]`
 
 **Reuse Strategy:** Scripts with identical requirements share venvs regardless of filename.
+
+### Scripts Directory Ownership Model
+
+```
+host:~/n8n/scripts/                    # Owned by user (1000:1000)
+├── .git/                              # Owned by root (from git clone)
+├── script1.py                         # Owned by root (644, world-readable)
+└── script2.py                         # Owned by root (644, world-readable)
+    │
+    ▼ docker-compose :ro mount
+container:/app/scripts/                # Read-only, root-accessible
+```
+
+**Design Rationale:**
+- **Directory**: User-owned (1000:1000) for host management
+- **Files**: Root-owned from `github_sync` systemd service
+- **Access**: Container runs as root, reads via `:ro` mount
+- **Editing**: Not permitted locally; GitHub is source of truth

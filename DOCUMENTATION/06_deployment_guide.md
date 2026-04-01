@@ -57,7 +57,7 @@ docker compose up -d
 
 # 3. Fix permissions (first run only)
 sudo chown -R 1000:1000 n8n-data/
-sudo chown -R 1000:1000 scripts/
+sudo chown 1000:1000 scripts/
 
 # 4. Configure nginx manually
 sudo cp HTTPS/nginx.conf /etc/nginx/sites-available/n8n_grafana.conf
@@ -150,3 +150,13 @@ if phone:
 
 result = {"person": person, "processed": True}
 ```
+
+### Script Ownership and Editing Workflow
+
+Scripts are **not edited locally**. The proper workflow is:
+
+1. **Tech team** edits scripts in GitHub repository
+2. **github_sync** service (running as root) pulls changes
+3. **Files** in `scripts/` are owned by `root:root` (644 permissions)
+4. **Directory** `scripts/` is owned by `1000:1000` for host management
+5. **python-api** container reads scripts via `:ro` mount as root

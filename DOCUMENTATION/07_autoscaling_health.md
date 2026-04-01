@@ -53,6 +53,13 @@ Automatically pulls vetted scripts from GitHub repository.
 | `SCRIPTS_BRANCH` | `main` | Branch to track |
 | `SYNC_INTERVAL_MINUTES` | 5 | Sync frequency |
 
+**Script Ownership Behavior:**
+
+| Sync Run | Directory | Files | Result |
+|----------|-----------|-------|--------|
+| First | Created as 1000:1000 if needed | Cloned as root:root | Success |
+| Subsequent | Unchanged | Updated as root:root | Success |
+
 **Management:**
 ```bash
 # Manual sync
