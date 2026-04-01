@@ -158,10 +158,22 @@ if [ -z "$REPO" ]; then
     exit 1
 fi
 
-# # Ensure target directory exists
-# if [ ! -d "$TARGET" ]; then
-#     mkdir -p "$TARGET"
-# fi
+# Ensure target directory exists
+if [ ! -d "$TARGET" ]; then
+    mkdir -p "$TARGET"
+else
+    # Fresh clone - handle non-empty target
+    TEMP_DIR=$(mktemp -d)
+    echo "$(date): Cloning $REPO to temp..."
+    git clone --branch "$BRANCH" --single-branch "$REPO" "$TEMP_DIR"
+    
+    echo "$(date): Syncing to $TARGET..."
+    # Remove existing files but keep directory
+    rm -rf "$TARGET"/*
+    # Copy new files
+    cp -r "$TEMP_DIR"/* "$TARGET"/
+    rm -rf "$TEMP_DIR"
+fi
 
 if [ -d "$TARGET/.git" ]; then
     # Existing repo: fetch and reset to ensure clean state
