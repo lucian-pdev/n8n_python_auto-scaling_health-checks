@@ -5,18 +5,18 @@
 set -e
 
 # === CONFIGURATION - EDIT THESE ===
-# SCRIPTS_REPO="https://github.com/your-org/vetted-scripts.git"  # Full HTTPS URL
-# SCRIPTS_BRANCH="main"                                          # Branch to track
-# SCRIPTS_DIR="$(pwd)/scripts"                                     # Where to clone/pull
-# GITHUB_TOKEN=""                                                # Optional: for private repos
-# SYNC_INTERVAL_MINUTES="5"                                      # How often to sync
-
-# === CONFIGURATION - Testing ===
-SCRIPTS_REPO="https://github.com/lucian-pdev/n8n_python_auto-scaling_health-checks.git"  # Full HTTPS URL
-SCRIPTS_BRANCH="scripts"                                          # Branch to track
+SCRIPTS_REPO="https://github.com/your-org/vetted-scripts.git"  # Full HTTPS URL
+SCRIPTS_BRANCH="main"                                          # Branch to track
 SCRIPTS_DIR="$(pwd)/scripts"                                     # Where to clone/pull
 GITHUB_TOKEN=""                                                # Optional: for private repos
 SYNC_INTERVAL_MINUTES="5"                                      # How often to sync
+
+# === CONFIGURATION - Testing ===
+# SCRIPTS_REPO="https://github.com/lucian-pdev/n8n_python_auto-scaling_health-checks.git"  # Full HTTPS URL
+# SCRIPTS_BRANCH="scripts"                                          # Branch to track
+# SCRIPTS_DIR="$(pwd)/scripts"                                     # Where to clone/pull
+# GITHUB_TOKEN=""                                                # Optional: for private repos
+# SYNC_INTERVAL_MINUTES="5"                                      # How often to sync
 # =================================
 
 # Derived config
