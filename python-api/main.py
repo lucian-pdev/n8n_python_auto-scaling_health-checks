@@ -62,7 +62,24 @@ WORKER_RESTARTS = Counter('py_api_worker_restarts_total', 'Total worker restarts
 SCRIPT_EXECUTIONS = Counter('py_api_script_executions_total', 'Script executions', ['script_name', 'status'])
 VENV_CREATIONS = Counter('py_api_venv_creations_total', 'Virtual environment creations')
 VENV_CACHE_HITS = Counter('py_api_venv_cache_hits_total', 'Virtual environment cache hits')
-
+SCRIPT_EXECUTION_DURATION = Histogram(
+    'py_api_script_execution_duration_seconds',
+    'Per-script execution time in seconds',
+    ['script_name']
+)
+JOB_RETRIES = Counter(
+    'py_api_job_retries_total',
+    'Jobs retried due to worker death',
+    ['script_name']
+)
+VENV_CORRUPTIONS = Counter(
+    'py_api_venv_corruptions_total',
+    'Venv corruption events detected'
+)
+OLDEST_WORKER_AGE = Gauge(
+    'py_api_oldest_worker_age_seconds',
+    'Age in seconds of the oldest running worker process'
+)
 ##############################################################
 # Virtual environment handling area
 ##############################################################
@@ -106,7 +123,13 @@ class ExecPayload(BaseModel):
     data: Dict[str, Any]
     code_file_name: str
 
-manager = WorkerManager(num_workers=4)
+# manager = WorkerManager(num_workers=4)    #WARNING: caused memory leak on new workers
+
+manager = WorkerManager(
+    num_workers=4,
+    active_workers_gauge=ACTIVE_WORKERS,
+    worker_restarts_counter=WORKER_RESTARTS
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -117,6 +140,10 @@ async def lifespan(app: FastAPI):
         while True:
             # Approximate queue size (multiprocessing.Queue doesn't expose size reliably)
             QUEUE_SIZE.set(0)  # Placeholder - would need custom queue for accurate size
+            if manager.workers:
+                now = time.time()
+                oldest_birth = min(w["birth"] for w in manager.workers)
+                OLDEST_WORKER_AGE.set(now - oldest_birth)
             await asyncio.sleep(10)
     
     # BACKGROUND TASK: runs concurrently with FastAPI
@@ -171,16 +198,23 @@ async def execute(payload: ExecPayload):
     
     try:
         result = manager.get_result(job_id)
-        
+
+        status = result.get("status", "unknown") if result else "unknown"
+
         SCRIPT_EXECUTIONS.labels(
             script_name=payload.code_file_name,
-            status=result.get("status", "unknown") if result else "unknown"
+            status=status
         ).inc()
-        
+
+        if result and result.get("process_time"):
+            SCRIPT_EXECUTION_DURATION.labels(
+                script_name=script_name
+            ).observe(result["process_time"])
+
         return {"result": result}
-        
+
     except JobRetryingException as e:
-        # Return 202 Accepted for retry scenario
+        JOB_RETRIES.labels(script_name=e.script_name or "unknown").inc()
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=202,

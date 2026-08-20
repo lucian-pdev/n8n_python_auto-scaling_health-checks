@@ -3,8 +3,8 @@
 set -e
 
 # Configuration
-DOMAIN="n8n.dashboard.com"      # CHANGE THIS
-EMAIL="your-email@example.com"  # CHANGE THIS
+DOMAIN="n8n.replace_me.com"                         # CHANGE THIS
+EMAIL="replace_me"                                  # CHANGE THIS
 
 NDIRS=( 
     prometheus-data

@@ -6,21 +6,35 @@ import subprocess
 import json
 import datetime as dt
 from multiprocessing import Process, Queue
+import multiprocessing
 import time
 import os
 from pathlib import Path
 import logging
 from typing import Optional, Dict, Any, Tuple
+import ctypes
+import ctypes.util
 
-try:
-    from main import ACTIVE_WORKERS, WORKER_RESTARTS
-except ImportError:
-    ACTIVE_WORKERS = None
-    WORKER_RESTARTS = None
+#WARNING: this caused a memory leak when a new worker would fork main.py
+# try:
+#     from main import ACTIVE_WORKERS, WORKER_RESTARTS
+# except ImportError:
+#     ACTIVE_WORKERS = None
+#     WORKER_RESTARTS = None
 
 logger = logging.getLogger(__name__)
 WRAPPER_PATH = Path("/app/wrapper.py")
+#multiprocessing.set_start_method('spawn', force=True)
 
+def _trim_malloc():
+    """Return glibc free pages to OS after fork/join cycle."""
+    try:
+        libc_name = ctypes.util.find_library('c')
+        if libc_name:
+            libc = ctypes.CDLL(libc_name)
+            libc.malloc_trim(ctypes.c_int(0))
+    except Exception:
+        pass
 
 ##############################################################
 # Task handling
@@ -253,7 +267,9 @@ def _format_json_error_output(e: json.JSONDecodeError, stdout: str, job_id: str,
 # Main worker loop
 ##############################################################
 
-def worker_main(job_queue: Queue, result_queue: Queue, package_manager: PackageManager):
+def worker_main(job_queue: Queue, result_queue: Queue, 
+                package_manager: PackageManager, 
+                stop_event: multiprocessing.Event): #type: ignore   #TODO: fix worker death and specific worker death
     """
     Worker process with subprocess isolation.
     Receives pre-loaded code but resolves venv by script_name.
@@ -263,6 +279,9 @@ def worker_main(job_queue: Queue, result_queue: Queue, package_manager: PackageM
     draining = False
     
     while True:
+        if stop_event.is_set():
+            break
+
         task = job_queue.get()
         
         is_valid, signal = _validate_task(task)
@@ -273,11 +292,11 @@ def worker_main(job_queue: Queue, result_queue: Queue, package_manager: PackageM
         
         if signal == "STOP":
             break
-            
+
         if signal == "DRAIN":
             draining = True
             continue
-        
+
         # Must be a job
         job_id, script_name, code, data = _unpack_job(task)
         
@@ -291,39 +310,43 @@ def worker_main(job_queue: Queue, result_queue: Queue, package_manager: PackageM
 ##############################################################
 # Worker manager
 ##############################################################
-
 class WorkerManager:
-    def __init__(self, num_workers: int = 4):
+    def __init__(self, num_workers: int = 4, active_workers_gauge=None, worker_restarts_counter=None):
         self.num_workers = num_workers
         self.job_queue: Queue = Queue()
         self.result_queue: Queue = Queue()
         self.workers: list[Dict] = []
         self._job_assignments: Dict[str, Dict] = {}
+        self._active_workers = active_workers_gauge
+        self._worker_restarts = worker_restarts_counter
+        self._stop_events: Dict[int, multiprocessing.Event] = {}    #type: ignore #TODO: fix worker death and specific worker death
         
     def start_workers(self):
         for i in range(self.num_workers):
-            pm = PackageManager()
-            p = Process(
-                target=worker_main,
-                args=(self.job_queue, self.result_queue, pm)
-            )
-            p.start()
-            self.workers.append({
-                "process": p,
-                "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
-                "draining": False,
-                "worker_id": i
+           stop_event = multiprocessing.Event()
+           pm = PackageManager()
+           p = multiprocessing.Process(
+               target=worker_main,
+               args=(self.job_queue, self.result_queue, pm, stop_event)
+           )
+           p.start()
+           self.workers.append({
+               "process": p,
+               "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
+               "draining": False,
+               "worker_id": i,
+               "stop_event": stop_event
             })
-        if ACTIVE_WORKERS:
-            ACTIVE_WORKERS.set(len(self.workers))
-            
+        if self._active_workers:
+            self._active_workers.set(len(self.workers))
+
     def stop_workers(self):
         for w in self.workers:
             self.job_queue.put(("STOP", None, None, None))
         for w in self.workers:
             w["process"].join()
-        if ACTIVE_WORKERS:
-            ACTIVE_WORKERS.set(0)
+        if self._active_workers:
+            self._active_workers.set(0)
         
     def _pick_worker(self) -> int:
         return hash(time.time()) % len(self.workers) if self.workers else 0
@@ -405,20 +428,36 @@ class WorkerManager:
         if oldest["draining"]:
             return
         
-        self.job_queue.put(("DRAIN", None, None, None))
+        oldest["draining"] = True
+        oldest["stop_event"].set()
         oldest["process"].join(timeout=60)
         if oldest["process"].is_alive():
             oldest["process"].terminate()
+            oldest["process"].join(timeout=5)
+        
+        _trim_malloc() # returns freed pages to OS
+        
+        stop_event = multiprocessing.Event()
         
         pm = PackageManager()
-        p = Process(target=worker_main, args=(self.job_queue, self.result_queue, pm))
+        p = multiprocessing.Process(target=worker_main, 
+                                    args=(self.job_queue, 
+                                          self.result_queue, 
+                                          pm,
+                                          stop_event)
+                                    )
+        
         p.start()
+        
         self.workers[oldest_idx] = {
-            "process": p,
-            "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
-            "draining": False
+             "process": p,
+             "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
+             "draining": False,
+             "stop_event": stop_event
         }
-        if WORKER_RESTARTS:
-            WORKER_RESTARTS.inc()
-        if ACTIVE_WORKERS:
-            ACTIVE_WORKERS.set(len(self.workers))
+
+        if self._worker_restarts:
+            self._worker_restarts.inc()
+        if self._active_workers:
+            self._active_workers.set(len(self.workers))
+

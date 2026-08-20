@@ -3,9 +3,6 @@
 A FastAPI-based Python execution service designed for n8n workflow automation. Features horizontal scaling with queue-based n8n workers, automatic SSL provisioning, nginx reverse proxy, systemd-based autoscaling, and comprehensive monitoring with Prometheus and Grafana.
 
 
-WORK IN PROGRESS!!!
-
-
 ## Full Documentation is avaiable in the DOCUMENTATION/ directory.
 
 

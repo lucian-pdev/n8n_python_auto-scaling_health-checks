@@ -47,6 +47,16 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+    environment:
+      - MALLOC_TRIM_THRESHOLD_=65536
+      - MALLOC_MMAP_THRESHOLD_=131072
+      - MALLOC_ARENA_MAX=2
+    deploy:
+      resources:
+        limits:
+          memory: 1500m
+        reservations:
+          memory: 256m
 
   # Prometheus Metrics Server
   prometheus:
@@ -72,6 +82,8 @@ services:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - "GF_SERVER_ROOT_URL=${N8N_WEBHOOK_URL:-https://n8n.dashboard.com}/grafana/"
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     volumes:
       - grafana-data:/var/lib/grafana
     ports:
@@ -123,6 +135,7 @@ services:
     container_name: n8n-main
     restart: unless-stopped
     environment:
+      - N8N_PUSH_BACKEND=websocket
       - NODE_ENV=production
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
@@ -130,14 +143,14 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
       - N8N_HOST=${N8N_HOST:-n8n.dashboard.com}
-      - WEBHOOK_URL=${WEBHOOK_URL:-https://n8n.dashboard.com}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://n8n.dashboard.com}
       - EXECUTIONS_MODE=queue       # Controls whether executions run in the main process or a subprocess.
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=0     # You can isolate n8n by using a different DB number.
       - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}   # Leave empty if Redis has no password
       - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-True}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-replace_me}
       # generated with "openssl rand -hex 32"
       # n8n-main and n8n-workers must have the SAME key
       - GENERIC_TIMEZONE=UTC
@@ -164,11 +177,14 @@ services:
     command: ["worker", "--concurrency=4"]
     environment:
       - EXECUTIONS_MODE=queue
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
+      - N8N_HOST=${N8N_HOST:-n8n.dashboard.com}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://n8n.dashboard.com}
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=0
       - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-a2ac75ab0d0f6798b16a61da518ba1f3d75e205f7560c312257911e90c7476b5}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-replace_me}
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432

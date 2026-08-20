@@ -10,6 +10,10 @@ from typing import Optional, Tuple
 import time
 import logging
 from exceptions import VenvCreationException
+try:
+    from main import VENV_CREATIONS, VENV_CACHE_HITS, VENV_CORRUPTIONS
+except ImportError:
+    VENV_CREATIONS = VENV_CACHE_HITS = VENV_CORRUPTIONS = None
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,8 @@ class PackageManager:
         if venv_path:
             self._corrupted_venvs.add(venv_path)
             logger.warning(f"Marked venv as corrupted: {venv_path}")
+            if VENV_CORRUPTIONS:
+                VENV_CORRUPTIONS.inc()
 
     def purge_corrupted_venv(self, venv_path: Path):
         """Remove and recreate venv"""
@@ -117,6 +123,8 @@ class PackageManager:
         
         # REUSE: Check if venv already exists
         if venv_path.exists():
+            if VENV_CACHE_HITS:
+                VENV_CACHE_HITS.inc()
             return (str(venv_path / "bin" / "python"), self.SCRIPTS_DIR, venv_path)
         
         # CREATE: Build new venv with error handling
@@ -159,6 +167,8 @@ class PackageManager:
             
         # Persist venv metadata
         (venv_path / ".requirements").write_text("\n".join(requirements))
+        if VENV_CREATIONS:
+            VENV_CREATIONS.inc()
 
     def _cleanup_old_venvs(self, max_age_days: int = 7):
         """Remove venvs older than max_age_days."""
