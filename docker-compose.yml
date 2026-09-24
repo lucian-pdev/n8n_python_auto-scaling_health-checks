@@ -135,6 +135,7 @@ services:
     container_name: n8n-main
     restart: unless-stopped
     environment:
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
       - N8N_PUSH_BACKEND=websocket
       - NODE_ENV=production
       - N8N_BASIC_AUTH_ACTIVE=true
@@ -176,6 +177,7 @@ services:
     restart: unless-stopped
     command: ["worker", "--concurrency=4"]
     environment:
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
       - EXECUTIONS_MODE=queue
       - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
       - N8N_HOST=${N8N_HOST:-n8n.dashboard.com}
@@ -197,12 +199,49 @@ services:
       - redis
       - n8n-main
 
+  postgres-nb:
+    image: postgres:17
+    container_name: postgres-nb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${NB_POSTGRES_PASSWORD:-replace_me}
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres-nb-data:/var/lib/postgresql/data
+    networks:
+      - n8n-network
+    ports:
+      - "127.0.0.1:5433:5432"   # host-local only, distinct port from the n8n postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  postgrest-nb:
+    image: postgrest/postgrest:v12.2.3
+    container_name: postgrest-nb
+    restart: unless-stopped
+    depends_on:
+      postgres-nb:
+        condition: service_healthy
+    environment:
+      - PGRST_DB_URI=postgres://authenticator:${NB_AUTHENTICATOR_PASSWORD:-replace-me}@postgres-nb:5432/postgres
+      - PGRST_DB_SCHEMAS=public
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${NB_PGRST_JWT_SECRET:-replace_me}
+      - PGRST_DB_USE_LEGACY_GUCS=false
+    networks:
+      - n8n-network
+    ports:
+      - "127.0.0.1:3001:3000"   # 3000 already taken by Grafana on this host
+
 volumes:
   prometheus-data:
   grafana-data:
   redis-data:
   n8n-data:
   postgres-data:
+  postgres-nb-data:
 
 networks:
   n8n-network:
