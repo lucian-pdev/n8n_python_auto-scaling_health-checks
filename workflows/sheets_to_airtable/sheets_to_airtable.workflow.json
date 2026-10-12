@@ -1,0 +1,723 @@
+{
+  "name": "Google Sheet → Airtable sync",
+  "nodes": [
+    {
+      "id": "ecd41270-33e0-4614-bb7c-9daac2fe9a16",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "08be708d-4ad5-4e9c-afb8-d76c35590401",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "85a01a5a-dd11-4321-89de-66b64990f46a",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        100
+      ],
+      "notes": "All settings live here. key_fields = 'if X == X' match; rules = 'then Y'. See README.md.",
+      "notesInFlow": true,
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f3f6d3ce-580c-4580-ae6a-c4e57710c24a",
+              "name": "sheet_url",
+              "value": "https://docs.google.com/spreadsheets/d/REPLACE_ME/edit",
+              "type": "string"
+            },
+            {
+              "id": "812f518e-d7b7-4744-9dc9-1f5bc5c8c554",
+              "name": "sheet_name",
+              "value": "Sheet1",
+              "type": "string"
+            },
+            {
+              "id": "1d2ae816-73e3-4a45-be14-25dc4be86d66",
+              "name": "airtable_base_id",
+              "value": "appREPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "87a782b3-6feb-404d-9a96-bc88aa34a355",
+              "name": "airtable_table",
+              "value": "People",
+              "type": "string"
+            },
+            {
+              "id": "b03285d8-7548-485a-bae3-d1bb3b27bf23",
+              "name": "key_fields",
+              "value": "[\"Email\"]",
+              "type": "array"
+            },
+            {
+              "id": "e14af92b-1cbb-40ea-8d0c-f755d9b69c4e",
+              "name": "mapping",
+              "value": "{\"Full name\": \"Name\", \"Email\": \"Email\", \"Stage\": \"Stage\"}",
+              "type": "object"
+            },
+            {
+              "id": "5b6c53b9-2a31-4f89-9d99-dd960d018079",
+              "name": "attachments",
+              "value": "{\"Photo\": \"Photo\"}",
+              "type": "object"
+            },
+            {
+              "id": "ba2f46e1-0b4a-4d84-8b47-cce9e973c968",
+              "name": "rules",
+              "value": "[{\"when\": {\"column\": \"Stage\", \"op\": \"equals\", \"value\": \"Hired\"}, \"set\": {\"Status\": \"Onboarding\"}}, {\"when\": {\"column\": \"Stage\", \"op\": \"equals\", \"value\": \"Archived\", \"source\": \"airtable\"}, \"skip\": true}]",
+              "type": "array"
+            },
+            {
+              "id": "49261604-3bfa-40d1-a392-7cb1cb9d34f5",
+              "name": "create_missing",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "1ada16a9-86ff-485a-aa73-c549f203f778",
+              "name": "skip_empty",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "9d7bcbcc-28f7-4e62-bc20-195823d61a5e",
+              "name": "typecast",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "de3e1888-361a-4a57-aac8-e0734b50863a",
+              "name": "python_api_url",
+              "value": "http://python-api:8000/execute",
+              "type": "string"
+            },
+            {
+              "id": "cdfa0471-a0fb-4f2c-95bc-18ea105be612",
+              "name": "script",
+              "value": "sheets_to_airtable.py",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e448e07c-08f0-40e1-b2cc-6f8460baae69",
+      "name": "Read Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheet_url }}",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheet_name }}",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "279c67aa-fe8d-424e-bf05-80a5ae268f7c",
+      "name": "Fetch Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.airtable.com/v0/{{ $('Config').first().json.airtable_base_id }}/{{ encodeURIComponent($('Config').first().json.airtable_table) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "offset",
+                    "value": "={{ $response.body.offset }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.offset }}",
+              "limitPagesFetched": true,
+              "maxRequests": 500,
+              "requestInterval": 250
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "b9e9fe43-a482-4665-9a78-aab340ee5be1",
+      "name": "Plan Upserts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.python_api_url }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'plan', config: $('Config').first().json, rows: $('Read Sheet').all().map(i => i.json), records: $('Fetch Airtable').all().map(i => i.json) } }) }}"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "bc8bac3a-769d-49a4-9494-7110d56d8f03",
+      "name": "Anything to upsert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f521f3e1-0eb3-47d0-a5e4-b95a6c22dac4",
+              "leftValue": "={{ ($json.result?.result?.upserts ?? []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3ccec30a-4781-4e0d-ae80-1b5b443b0d15",
+      "name": "Split Upserts",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "result.result.upserts",
+        "options": {}
+      }
+    },
+    {
+      "id": "ef63549a-20b7-4df3-8386-d1ac084241bf",
+      "name": "Upsert Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Config').first().json.airtable_base_id }}/{{ encodeURIComponent($('Config').first().json.airtable_table) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 4,
+              "batchInterval": 1100
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "48e3c08a-9c0d-4feb-a9e9-e1e9b0ab3270",
+      "name": "Plan Attachments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.python_api_url }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'attachments', config: $('Config').first().json, rows: $('Read Sheet').all().map(i => i.json), records: $('Fetch Airtable').all().map(i => i.json).concat(($('Upsert Airtable').isExecuted ? $('Upsert Airtable').all().map(i => i.json) : [])) } }) }}"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "58a469e7-764b-460a-8624-83fb277ce908",
+      "name": "Split Attachments",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "fieldToSplitOut": "result.result.attachments",
+        "options": {}
+      }
+    },
+    {
+      "id": "8f7a5c3e-4827-4cbd-91a8-16df261243ba",
+      "name": "Download from Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2640,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.drive_file_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5aba2bb5-e073-4f94-9c67-c1cd88aadb3f",
+      "name": "Build Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Turn each downloaded Drive file into an Airtable uploadAttachment body.\n// getBinaryDataBuffer works whatever binary mode n8n runs in (memory / filesystem / S3).\nconst MAX = 5 * 1024 * 1024;            // Airtable uploadAttachment limit\nconst items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const job = $('Split Attachments').itemMatching(i).json;\n  const bin = items[i].binary?.data;\n  if (!bin) {\n    out.push({ json: { ...job, skip: `Drive download failed: ${items[i].json.error?.message ?? 'no file returned'}` } });\n    continue;\n  }\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  if (buf.length > MAX) {\n    out.push({ json: { ...job, skip: `file too large (${(buf.length / 1048576).toFixed(1)} MB, limit 5 MB)` } });\n    continue;\n  }\n  out.push({ json: {\n    ...job,\n    contentType: bin.mimeType || 'application/octet-stream',\n    filename: job.filename_prefix + (bin.fileName || 'file'),\n    file: buf.toString('base64'),\n  } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "15221b18-3513-4066-a757-47ef45c897a9",
+      "name": "Uploadable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9c94f24f-8753-47f1-a96f-74d3a4c796a5",
+              "leftValue": "={{ !$json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "55ad8794-c8bc-4877-83c9-190908a5d248",
+      "name": "Upload Attachment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://content.airtable.com/v0/{{ $('Config').first().json.airtable_base_id }}/{{ $json.record_id }}/{{ encodeURIComponent($json.field) }}/uploadAttachment",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 4,
+              "batchInterval": 1100
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contentType: $json.contentType, file: $json.file, filename: $json.filename }) }}"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "387c77d0-eaf0-4075-95fc-cd151ca52c1b",
+      "name": "Skipped Attachments",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3300,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4a2d9e32-ae45-45b2-ae4d-d5415964697f",
+              "leftValue": "={{ $json.result?.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d293a034-7ff2-4107-9e8b-d2e94a148fd7",
+      "name": "Upserts OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "notes": "python-api answers HTTP 200 even when the script fails; result.status tells. false -> Script Failed.",
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "08857eea-f5d8-44c2-b083-a06ba3f1aa0b",
+              "leftValue": "={{ $json.result?.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2bc9678b-1a6f-4e7c-bbc2-afe248b61622",
+      "name": "Attachments OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "notes": "python-api answers HTTP 200 even when the script fails; result.status tells. false -> Script Failed.",
+      "position": [
+        2200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=python-api {{ $json.result?.status ?? $json.status ?? 'no response' }}: {{ $json.result?.error ?? $json.message ?? JSON.stringify($json).slice(0, 500) }}"
+      },
+      "id": "ad74b03d-2fab-4e95-a4b6-ab1664192145",
+      "name": "Script Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        320
+      ],
+      "notes": "Turns a python-api script error into a failed (red) execution with the script's message."
+    }
+  ],
+  "connections": {
+    "Every 15 min": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sheet": {
+      "main": [
+        [
+          {
+            "node": "Fetch Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Airtable": {
+      "main": [
+        [
+          {
+            "node": "Plan Upserts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Upserts": {
+      "main": [
+        [
+          {
+            "node": "Upserts OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to upsert?": {
+      "main": [
+        [
+          {
+            "node": "Split Upserts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Plan Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Upserts": {
+      "main": [
+        [
+          {
+            "node": "Upsert Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Airtable": {
+      "main": [
+        [
+          {
+            "node": "Plan Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Attachments": {
+      "main": [
+        [
+          {
+            "node": "Attachments OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Attachments": {
+      "main": [
+        [
+          {
+            "node": "Download from Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download from Drive": {
+      "main": [
+        [
+          {
+            "node": "Build Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Upload": {
+      "main": [
+        [
+          {
+            "node": "Uploadable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadable?": {
+      "main": [
+        [
+          {
+            "node": "Upload Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skipped Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upserts OK?": {
+      "main": [
+        [
+          {
+            "node": "Anything to upsert?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attachments OK?": {
+      "main": [
+        [
+          {
+            "node": "Split Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

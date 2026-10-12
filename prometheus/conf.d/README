@@ -1,0 +1,5 @@
+# Put local scrape configs here as *.yml (ignored by git). Example:
+#   scrape_configs:
+#     - job_name: my-exporter
+#       static_configs:
+#         - targets: ["my-exporter:9187"]

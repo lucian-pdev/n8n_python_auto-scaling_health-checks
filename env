@@ -1,0 +1,65 @@
+# ============================================
+# N8N Configuration - PRODUCTION (template)
+# ============================================
+# The only file you edit. env-maker.sh turns it into .env.
+# Test counterpart: testing_files/env (same keys, test values).
+DOMAIN='replace_domain'
+EMAIL='replace_email'
+N8N_PROTOCOL=https
+# n8n image version (main + workers). Pinned: an update is a deliberate .env change (see upgrade/README.md)
+N8N_VERSION=2.43.3
+# Docker network Traefik routes on (exact name, shared by Traefik, n8n-main, grafana)
+TRAEFIK_NETWORK=naypyers-proxy
+N8N_SECURE_COOKIE=True
+
+# Traefik
+ACME_CA_SERVER='https://acme-v02.api.letsencrypt.org/directory'
+TRAEFIK_LOG_LEVEL=INFO
+TRAEFIK_DASHBOARD_PUBLISHED_PORT=127.0.0.1:8082:8080
+
+# Security
+N8N_BASIC_AUTH_USER='replace_user'
+N8N_BASIC_AUTH_PASSWORD='replace_password'
+N8N_ENCRYPTION_KEY='replace_ssl'
+N8N_USER_MANAGEMENT_JWT_SECRET='replace_ssl'
+
+# Port Bindings (localhost only - public traffic goes through traefik)
+N8N_PUBLISHED_PORT=127.0.0.1:5678:5678
+GRAFANA_PUBLISHED_PORT=127.0.0.1:3000:3000
+PROMETHEUS_PUBLISHED_PORT=127.0.0.1:9090:9090
+CADVISOR_PUBLISHED_PORT=127.0.0.1:8080:8080
+NODE_EXPORTER_PUBLISHED_PORT=127.0.0.1:9100:9100
+PYTHON_API_PUBLISHED_PORT=127.0.0.1:8000:8000
+
+# Grafana
+GF_SECURITY_ADMIN_USER='replace_user'
+GF_SECURITY_ADMIN_PASSWORD='replace_password'
+
+# Databases
+REDIS_PASSWORD='replace_password'
+POSTGRES_USERNAME='replace_user'
+POSTGRES_PASSWORD='replace_password'
+
+# Scripts sync (github_sync systemd timer)
+# Timer interval is written at install time: rerun autoscaler/setup-systemd.sh after changing it.
+SCRIPTS_REPO='https://github.com/lucian-pdev/n8n_python_auto-scaling_health-checks.git'
+SCRIPTS_BRANCH='scripts'
+GITHUB_TOKEN=''
+SYNC_INTERVAL_MINUTES=5
+
+# Autoscaler (n8n-worker replicas)
+AUTOSCALE_MIN_REPLICAS=1
+AUTOSCALE_MAX_REPLICAS=10
+AUTOSCALE_THRESHOLD_UP=4        # scale up when more than N jobs wait in the n8n queue
+AUTOSCALE_COOLDOWN=60
+
+# Suppress deprecation warnings
+N8N_UNVERIFIED_PACKAGES_ENABLED=true
+N8N_RUNNERS_TASK_TIMEOUT=300
+N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES=2147483648
+N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES=5000
+N8N_UNVERIFIED_PACKAGES_ENABLED=true
+N8N_RUNNERS_TASK_TIMEOUT=300
+N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES=2147483648
+N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES=5000
+N8N_PUSH_BACKEND=websocket

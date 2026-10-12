@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Python (python-api/, workflows/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# secrets and generated env files (the tracked template is "env", without the dot)
+.env
+.env.*
+
+# Cursor editor
+.cursorignore
+.cursorindexingignore
+
+# generated at deploy time
+prometheus/conf.d/*.yml
+*.log
+
+# private notes (workflows/sheets_to_airtable/not-commited/)
+not-commited/
