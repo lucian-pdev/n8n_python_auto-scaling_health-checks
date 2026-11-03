@@ -21,3 +21,9 @@ prometheus/conf.d/*.yml
 
 # private notes (workflows/sheets_to_airtable/not-commited/)
 not-commited/
+
+# private publish notes: kept untracked in dev checkouts, never in main or hostinger
+PUBLISH_REMINDER.md
+
+# db/: proprietary NB migrations on the Hostinger server (they belong to the hostinger branch's db/, never tracked)
+/db/

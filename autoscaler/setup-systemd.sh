@@ -16,7 +16,7 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 set -a; source "$ENV_FILE"; set +a
 
-SCRIPTS_DIR="$PROJECT_DIR/scripts"
+SCRIPTS_DIR="${NAYPYERS_LOCAL:-$PROJECT_DIR}/scripts"     # NAYPYERS_LOCAL: the install's state dir (absolute)
 SYNC_INTERVAL_MINUTES="${SYNC_INTERVAL_MINUTES:-5}"
 TARGET_DIR="/usr/local/bin"
 

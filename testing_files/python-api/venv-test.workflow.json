@@ -1,0 +1,151 @@
+{
+  "id": "PyApiVenvTest01",
+  "name": "python-api venv test",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "6c1b3a52-0f3e-4c55-9d7a-1f5a8e1b0a01",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6c1b3a52-0f3e-4c55-9d7a-1f5a8e1b0a02",
+      "name": "Run venv script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "pyapi_venv.py needs tabulate (not in the base image): python-api builds a venv and runs the script in it. Timeout above the 300 s request budget.",
+      "parameters": {
+        "method": "POST",
+        "url": "http://python-api:8000/execute",
+        "options": {
+          "timeout": 330000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code_file_name: 'pyapi_venv.py', data: { rows: [['n8n', 1], ['venv', 2]] } }) }}"
+      }
+    },
+    {
+      "id": "6c1b3a52-0f3e-4c55-9d7a-1f5a8e1b0a03",
+      "name": "Ran in a venv?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.result?.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.result?.result?.python }}",
+              "rightValue": "/venvs/",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6c1b3a52-0f3e-4c55-9d7a-1f5a8e1b0a04",
+      "name": "Venv OK",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        -100
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6c1b3a52-0f3e-4c55-9d7a-1f5a8e1b0a05",
+      "name": "Venv failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "errorMessage": "=python-api {{ $json.result?.status ?? 'no response' }}: {{ $json.result?.error ?? JSON.stringify($json).slice(0, 500) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Run venv script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run venv script": {
+      "main": [
+        [
+          {
+            "node": "Ran in a venv?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ran in a venv?": {
+      "main": [
+        [
+          {
+            "node": "Venv OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Venv failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

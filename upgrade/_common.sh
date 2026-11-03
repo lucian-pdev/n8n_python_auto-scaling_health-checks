@@ -41,7 +41,7 @@ db_containers() {
     dc ps --format '{{.Name}}|{{.Image}}' 2>/dev/null | while IFS='|' read -r name image; do
         base="${image%%@*}"; base="${base##*/}"; base="${base%%:*}"
         case "$base" in
-            postgres*|postgis|timescaledb*|pgvector) echo "postgres $name" ;;
+            postgres|postgresql|postgis|timescaledb*|pgvector) echo "postgres $name" ;;   # not postgres*: postgrest is no database
             mysql|mariadb|percona*) echo "mysql $name" ;;
             redis*|valkey|keydb|dragonfly) echo "redis $name" ;;
             mongo*) echo "mongo $name" ;;

@@ -13,7 +13,8 @@ COPY main.py .
 COPY wrapper.py .
 COPY packagemanager.py .
 COPY exceptions.py .
-COPY worker.py .
+COPY metrics.py .
+COPY workerv2.py .
 
 RUN mkdir -p /app/scripts /app/venvs
 

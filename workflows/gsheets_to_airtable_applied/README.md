@@ -21,6 +21,7 @@ import the one you need; don't mix nodes between them.
 
 - `gsheets_to_airtable.py` - python-api script (stdlib only), modes `plan` and `attachments`. Shared by all methods
 - `shrink_image.py` - python-api script (`# requires: Pillow`, venv built on first call), only called for oversized images
+- `spam_score.py`, `known_spam.csv`, `spam_slack.workflow.json`, `tests/` - signup spam filter (python-api script, data table schema, Slack sub-workflow, tests). Signups workflow only: [SPAM_FILTER.md](SPAM_FILTER.md)
 - `onboarding.workflow.json`, `signups.workflow.json` - service account workflows (same nodes, different Config)
 - `alternatives/oauth2/*.workflow.json` - OAuth2 workflows
 - `alternatives/apps_script/*.workflow.json`, `alternatives/apps_script/Code.gs` - Apps Script workflows + the proxy script

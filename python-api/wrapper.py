@@ -16,9 +16,7 @@ import linecache
 import sys
 import traceback
 
-
-class ScriptError(Exception):
-    """Raise in a script for an expected failure; the message goes to n8n unchanged."""
+from exceptions import ScriptError
 
 
 def _emit(output: dict) -> None:
@@ -66,8 +64,8 @@ def main():
             "ScriptError": ScriptError,
             "__builtins__": __builtins__,
         }
-        exec(compile(code, script_name, "exec"), user_namespace)
-    except Exception as e:
+        exec(compile(code, script_name, "exec"), user_namespace)  # noqa: S102 # exec is the whole point
+    except Exception as e:  # noqa: BLE001 # It's meant to report any errors
         _emit({"job_id": job_id, **_describe(e, script_name)})
         return 1
 

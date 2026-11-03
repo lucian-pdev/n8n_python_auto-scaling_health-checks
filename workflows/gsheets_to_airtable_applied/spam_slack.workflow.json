@@ -1,0 +1,243 @@
+{
+  "name": "Spam Slack (sub-workflow of Signups)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "bae2c57f-68f6-49f2-826a-b9ef27eee989",
+      "name": "When called by Signups",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "notes": "One Slack message from spam_score.py: kind, text, match_key, channel, table_id."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dd448a05-fabe-4662-ad29-47dae2dc503b",
+              "leftValue": "={{ $json.kind }}",
+              "rightValue": "review",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1a7c676c-8640-4f11-82a9-1188d5091583",
+      "name": "Review card?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.channel }}",
+          "mode": "id"
+        },
+        "message": "={{ $json.text }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Not spam",
+            "disapproveLabel": "Spam"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 14,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "020579f5-fd8f-4ed0-bf3f-1e2e4f34a2a2",
+      "name": "Review Card",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        200
+      ],
+      "notes": "Waits for a click (up to 14 days). The buttons open n8n's public URL, so n8n must be reachable at WEBHOOK_URL."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5ce8f4b4-8bf5-4c22-baef-ee1a5ce265bf",
+              "name": "status",
+              "type": "string",
+              "value": "={{ $json.data?.approved === false ? 'spam' : 'not_spam' }}"
+            },
+            {
+              "id": "17ce534f-e4c6-41f2-a0da-982796c38260",
+              "name": "match_key",
+              "type": "string",
+              "value": "={{ $('When called by Signups').item.json.match_key }}"
+            },
+            {
+              "id": "33614bc1-0a64-4732-88ae-98aa22062d5d",
+              "name": "table_id",
+              "type": "string",
+              "value": "={{ $('When called by Signups').item.json.table_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5dba6986-77c7-45e8-a9b7-b6f98be9d88c",
+      "name": "Verdict",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        200
+      ],
+      "notes": "Spam -> spam. Not spam, or no answer in 14 days -> not_spam (the row passes on the next run)."
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.table_id }}"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "match_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.match_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.status }}",
+            "source": "human"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "b5b51739-f5f5-4ce8-bde2-3482b7a9ca31",
+      "name": "Update Spam Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.channel }}",
+          "mode": "id"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "657f0eaa-0dac-4db4-abc1-6ae8a9331aeb",
+      "name": "Blocked Note",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        420
+      ],
+      "notes": "One line: score, name, blocked."
+    }
+  ],
+  "connections": {
+    "When called by Signups": {
+      "main": [
+        [
+          {
+            "node": "Review card?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review card?": {
+      "main": [
+        [
+          {
+            "node": "Review Card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Blocked Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Card": {
+      "main": [
+        [
+          {
+            "node": "Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verdict": {
+      "main": [
+        [
+          {
+            "node": "Update Spam Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

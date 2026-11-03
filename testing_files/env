@@ -11,6 +11,18 @@ N8N_PROTOCOL=https
 N8N_VERSION=2.43.3
 # Docker network Traefik routes on (exact name, shared by Traefik, n8n-main, grafana)
 TRAEFIK_NETWORK=naypyers-proxy
+
+# Install identity: what this install's persistent state is called and where it lives. Set once per install,
+# never change: every volume and network is named after COMPOSE_PROJECT_NAME (default: the folder name).
+#COMPOSE_PROJECT_NAME=naypyers
+# State dir (absolute path): scripts/, job-output/, prometheus/conf.d/. Empty = this checkout.
+NAYPYERS_LOCAL=
+# 1 after the first deploy: deploy.sh refuses to start when a volume of this install is missing
+NAYPYERS_EXPECT_STATE=0
+# Image pins (empty = the compose defaults). Pin what runs: a database major jump can't open the old data.
+POSTGRES_IMAGE=
+REDIS_IMAGE=
+GRAFANA_IMAGE=
 N8N_SECURE_COOKIE=True
 
 # Traefik

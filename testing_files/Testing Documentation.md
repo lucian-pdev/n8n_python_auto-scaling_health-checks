@@ -113,7 +113,7 @@ Or simply delete the VM. Remove its line from your `/etc/hosts`.
 | fetch / os-before / os-after | `repro/procedure.sh` | upgrade scripts of the new ref, backup, patient stop, OS update, reboot, everything back |
 | upgrade / verify | `repro/procedure.sh` | backup, switch-code, migrate-env, n8n -> `REPRO_N8N_NEW`, preflight, apply, verify |
 
-The Hostinger upgrade (nginx -> Traefik, NB database) has its own procedure and rehearsal on the `hostinger` branch.
+Moving an install to the code/state layout (`deploy/atomic.py`) has its own rehearsal: the `naypyers-atomic` Jenkins job.
 
 ### For maintainers: changing the test config
 

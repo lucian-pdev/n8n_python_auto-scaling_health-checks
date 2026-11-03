@@ -43,7 +43,7 @@ classify() {      # classify <image> <name> -> "tier kind"   kind: postgres | re
     if [[ "$image" == *openproject/openproject* && "$image" != *slim* ]]; then echo "4 postgres-aio"; return; fi  # all-in-one: Postgres inside
     if [[ "$base" =~ $DB_RE ]]; then
         case "$base" in
-            postgres*|postgis|timescaledb*|pgvector) echo "4 postgres" ;;
+            postgres|postgresql|postgis|timescaledb*|pgvector) echo "4 postgres" ;;   # not postgres*: postgrest is an app
             redis*|valkey|keydb|dragonfly) echo "4 redis" ;;
             *) echo "4 db" ;;
         esac; return

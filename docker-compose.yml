@@ -45,12 +45,12 @@ services:
       retries: 3
 
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}      # pinned per install in .env (a major jump can't open old data)
     container_name: postgres
     stop_grace_period: 10m      # clean shutdown (checkpoint) instead of a kill after Docker's default 10 s
     environment:
       - POSTGRES_USER=${POSTGRES_USERNAME:-n8n}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=n8n
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -59,7 +59,7 @@ services:
     restart: unless-stopped
     
   redis:
-    image: redis:latest
+    image: ${REDIS_IMAGE:-redis:latest}
     container_name: redis
     restart: unless-stopped
     stop_grace_period: 10m      # time to flush the queue to disk before Docker gives up and kills it
@@ -80,8 +80,8 @@ services:
       dockerfile: Dockerfile
     container_name: python-api
     volumes:
-      - ./scripts:/app/scripts:ro
-      - ./job-output:/app/output
+      - ${NAYPYERS_LOCAL:-.}/scripts:/app/scripts:ro       # NAYPYERS_LOCAL: the install's state dir (default: here)
+      - ${NAYPYERS_LOCAL:-.}/job-output:/app/output
     ports:
       - ${PYTHON_API_PUBLISHED_PORT:-127.0.0.1:8000:8000}
     networks:
@@ -114,7 +114,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/conf.d:/etc/prometheus/conf.d:ro      # local extra scrape targets (see prometheus.yml)
+      - ${NAYPYERS_LOCAL:-.}/prometheus/conf.d:/etc/prometheus/conf.d:ro      # local extra scrape targets (see prometheus.yml)
       - prometheus-data:/prometheus
     ports:
       - ${PROMETHEUS_PUBLISHED_PORT:-127.0.0.1:9090:9090}
@@ -124,11 +124,11 @@ services:
 
   # Grafana Dashboard
   grafana:
-    image: grafana/grafana:main-ubuntu
+    image: ${GRAFANA_IMAGE:-grafana/grafana:main-ubuntu}
     container_name: grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
@@ -194,7 +194,7 @@ services:
       - NODE_ENV=production
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-pass}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:?set N8N_BASIC_AUTH_PASSWORD in .env}
       - N8N_PORT=5678
       - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
       - N8N_HOST=${DOMAIN}
@@ -206,7 +206,7 @@ services:
       - QUEUE_BULL_REDIS_DB=0     # You can isolate n8n by using a different DB number.
       - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}   # Leave empty if Redis has no password
       - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-True}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-replace_me}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
       # n8n-main and n8n-workers must have the SAME key
       - GENERIC_TIMEZONE=UTC
       - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
@@ -215,7 +215,7 @@ services:
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
       - DB_POSTGRESDB_USER=${POSTGRES_USERNAME:-n8n}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       # Prometheus /metrics (scraped over the monitoring network; blocked publicly by the n8n-metrics router)
       - N8N_METRICS=true
       - N8N_METRICS_INCLUDE_QUEUE_METRICS=true    # n8n_scaling_mode_queue_jobs_{waiting,active,completed,failed}
@@ -224,7 +224,7 @@ services:
       - ${N8N_PUBLISHED_PORT:-127.0.0.1:5678:5678}
     volumes:
       - n8n-data:/home/node/.n8n
-      - ./job-output:/home/node/job-output
+      - ${NAYPYERS_LOCAL:-.}/job-output:/home/node/job-output
     networks:
       - n8n-network
       - monitoring
@@ -258,20 +258,20 @@ services:
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=0
       - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-replace_me}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
       - DB_POSTGRESDB_USER=${POSTGRES_USERNAME:-n8n}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - N8N_METRICS=true
       - QUEUE_HEALTH_CHECK_ACTIVE=true            # worker HTTP server on :5678 (/healthz, /metrics)
     networks:
       - n8n-network
       - monitoring                                # Prometheus finds every replica via dns_sd_configs
     volumes:
-      - ./job-output:/home/node/job-output
+      - ${NAYPYERS_LOCAL:-.}/job-output:/home/node/job-output
     depends_on:
       - redis
       - n8n-main

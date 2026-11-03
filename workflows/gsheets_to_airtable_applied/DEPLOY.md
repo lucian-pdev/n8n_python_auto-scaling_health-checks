@@ -55,13 +55,13 @@ The check for this step is in step 5 (Execute step on Read Sheet).
 
 ## 3. Scripts to the server
 
-Put both files on the branch from step 1 (here the `scripts` branch of the GitHub repo):
+Put the files on the branch from step 1 (`spam_score.py` only for the Signups workflow's spam filter, see [SPAM_FILTER.md](SPAM_FILTER.md)) (here the `scripts` branch of the GitHub repo):
 ```bash
 # in a clone that can push to that repo
 git worktree add ../scripts-branch scripts
-cp workflows/gsheets_to_airtable_applied/{gsheets_to_airtable.py,shrink_image.py} ../scripts-branch/
-cd ../scripts-branch && git add gsheets_to_airtable.py shrink_image.py \
-  && git commit -m "add gsheets_to_airtable + shrink_image" && git push
+cp workflows/gsheets_to_airtable_applied/{gsheets_to_airtable.py,shrink_image.py,spam_score.py} ../scripts-branch/
+cd ../scripts-branch && git add gsheets_to_airtable.py shrink_image.py spam_score.py \
+  && git commit -m "add gsheets_to_airtable + shrink_image + spam_score" && git push
 ```
 Never copy them into the server's `scripts/` by hand: `github_sync` resets that folder.
 

@@ -197,6 +197,60 @@
               "type": "boolean"
             },
             {
+              "id": "4e336954-285f-4536-9ba9-f687618acf0e",
+              "name": "spam_filter",
+              "value": "{\n  \"enabled\": true,\n  \"start\": 100,\n  \"pass_at\": 75,\n  \"review_at\": 50,\n  \"review_title\": \"Gsheet 2 Airtable checkup: Possible Spam in Volunteers\",\n  \"blocked_text\": \"Spam in Gsheets 2 Airtable, score {score}, Name {name}, blocked.\",\n  \"columns\": {\n    \"first_name\": \"First Name\",\n    \"last_name\": \"Last Name\",\n    \"email\": \"Email Address\",\n    \"phone\": \"Phone Number\",\n    \"location_1\": \"Current Location\",\n    \"location_2\": \"Country of Origin\"\n  },\n  \"list1_columns\": {\n    \"email\": \"Email\",\n    \"phone\": \"Phone\",\n    \"country\": \"Country Code\",\n    \"verdict\": \"Human Verdict\",\n    \"zone\": \"Spam Zone\"\n  },\n  \"list1_spam_verdicts\": [\n    \"spam\",\n    \"spam_banned\",\n    \"spam_delete_requested\"\n  ],\n  \"list1_ok_verdicts\": [\n    \"not_spam\"\n  ],\n  \"allowed_continents\": [\n    \"EU\"\n  ],\n  \"allowed_countries\": [\n    \"US\",\n    \"CA\",\n    \"AU\",\n    \"KR\",\n    \"CN\",\n    \"JP\"\n  ],\n  \"denied_countries\": [\n    \"RU\",\n    \"TR\",\n    \"IL\",\n    \"MX\",\n    \"NZ\"\n  ],\n  \"phone_default_region\": \"\",\n  \"name_email_min_overlap\": 0.2,\n  \"test_names\": {\n    \"enabled\": false,\n    \"pattern\": \"\\\\b(test|testing|testapi|deleteme|bot|spamtest)\\\\b\"\n  },\n  \"spam_keywords\": [\n    \"viagra\",\n    \"casino\",\n    \"crypto\",\n    \"bitcoin\",\n    \"forex\",\n    \"backlink\",\n    \"porn\",\n    \"whatsapp\",\n    \"telegram\",\n    \"click here\",\n    \"free money\",\n    \"make money\"\n  ],\n  \"max_field_length\": 150,\n  \"points\": {\n    \"phone_region_denied\": 25,\n    \"place_denied\": 25,\n    \"place_unresolved\": 5,\n    \"place_blank\": 10,\n    \"geo_both_denied\": 10,\n    \"geo_phone_place_mismatch\": 5,\n    \"phone_missing\": 10,\n    \"phone_unparseable\": 25,\n    \"phone_not_possible\": 25,\n    \"phone_not_valid\": 15,\n    \"phone_no_country\": 5,\n    \"phone_repeated_digits\": 15,\n    \"email_missing\": 15,\n    \"email_bad_syntax\": 30,\n    \"email_disposable\": 30,\n    \"email_random_local\": 10,\n    \"name_email_low_overlap\": 3,\n    \"name_missing\": 15,\n    \"name_bad_chars\": 25,\n    \"name_initials\": 10,\n    \"name_same\": 10,\n    \"name_gibberish\": 10,\n    \"link_or_keyword\": 20,\n    \"field_too_long\": 15,\n    \"duplicate_in_batch\": 15,\n    \"list1_unreviewed_spam\": 10\n  }\n}",
+              "type": "object"
+            },
+            {
+              "id": "67290e46-e4a4-4920-9d6c-f4d1a948308e",
+              "name": "spam_list1_sheet_url",
+              "value": "https://docs.google.com/spreadsheets/d/REPLACE_ME/edit",
+              "type": "string"
+            },
+            {
+              "id": "3839c381-26e2-4567-89a5-41f954bb7e74",
+              "name": "spam_list1_tab",
+              "value": "Spam",
+              "type": "string"
+            },
+            {
+              "id": "854124eb-dff4-4bd2-94fa-cebdd519e167",
+              "name": "spam_list1_header_row",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "10ebd290-d867-47fe-838c-2af2bc1a5193",
+              "name": "spam_table_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "1bb6fa55-d911-48aa-bf93-cb9718a2bf4a",
+              "name": "spam_slack_channel",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "7435f3b7-6f84-456d-b0ac-43570ca2122c",
+              "name": "spam_review_mention_ids",
+              "type": "array",
+              "value": "[\"REPLACE_ME_MEMBER_ID\"]"
+            },
+            {
+              "id": "dc4c1cd6-cfd6-45bf-a871-9ce7640906cc",
+              "name": "spam_slack_workflow_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "5ec4e3d2-97cb-4d04-baf0-9e369bd77d47",
+              "name": "spam_script",
+              "value": "spam_score.py",
+              "type": "string"
+            },
+            {
               "id": "e380892e-cf71-49fa-9300-c23cb608f0d9",
               "name": "python_api_url",
               "value": "http://python-api:8000/execute",
@@ -332,7 +386,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'plan', config: $('Config').first().json, schema: $('Fetch Schema').first().json, rows: $('Read Sheet').all().map(i => i.json), records: $('Fetch Airtable').all().map(i => i.json) } }) }}"
+        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'plan', config: $('Config').first().json, schema: $('Fetch Schema').first().json, rows: $('Score Rows').first().json.result.result.rows, records: $('Fetch Airtable').all().map(i => i.json) } }) }}"
       },
       "executeOnce": true
     },
@@ -444,7 +498,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'attachments', config: $('Config').first().json, schema: $('Fetch Schema').first().json, rows: $('Read Sheet').all().map(i => i.json), records: $('Fetch Airtable').all().map(i => i.json), upsert_responses: ($('Upsert Airtable').isExecuted ? $('Upsert Airtable').all().map(i => i.json) : []) } }) }}"
+        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.script, data: { mode: 'attachments', config: $('Config').first().json, schema: $('Fetch Schema').first().json, rows: $('Score Rows').first().json.result.result.rows, records: $('Fetch Airtable').all().map(i => i.json), upsert_responses: ($('Upsert Airtable').isExecuted ? $('Upsert Airtable').all().map(i => i.json) : []) } }) }}"
       },
       "executeOnce": true,
       "onError": "continueRegularOutput"
@@ -809,6 +863,212 @@
         320
       ],
       "parameters": {}
+    },
+    {
+      "id": "c6d4971a-374f-467b-b8c5-bb1326583312",
+      "name": "Read Known Spam",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        520
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spam_list1_sheet_url }}",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spam_list1_tab }}",
+          "mode": "name"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange",
+              "headerRow": "={{ $('Config').first().json.spam_list1_header_row || 1 }}",
+              "firstDataRow": "={{ ($('Config').first().json.spam_list1_header_row || 1) + 1 }}"
+            }
+          },
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "49c7ccbb-0e9c-4575-ab77-3923d283f363",
+      "name": "Read Spam Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        520
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.spam_table_id }}"
+        },
+        "returnAll": true
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "81f5516a-4851-4c7f-9e8c-dacd5ff7ab7b",
+      "name": "Score Rows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.python_api_url }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code_file_name: $('Config').first().json.spam_script, data: { mode: 'score', config: $('Config').first().json, rows: $('Read Sheet').all().map(i => i.json), list1: $('Read Known Spam').all().map(i => i.json), list2: $('Read Spam Table').all().map(i => i.json) } }) }}"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "62a1bbf5-a3be-4c13-bd96-0e37959319ce",
+      "name": "Score OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9904077a-b2c1-474c-bfdd-dcc439d0363b",
+              "leftValue": "={{ $json.result?.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "42d3d441-c860-4450-a7b1-84403c241850",
+      "name": "Split Table Writes",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "fieldToSplitOut": "result.result.table_writes",
+        "options": {}
+      }
+    },
+    {
+      "id": "9daf1fb5-25ff-4e79-a391-d9da1dafd95e",
+      "name": "Upsert Spam Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        100
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.spam_table_id }}"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "match_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.match_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "7b20785a-2418-4bd1-b231-9ed314f2bbc1",
+      "name": "Split Slack Messages",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        260
+      ],
+      "parameters": {
+        "fieldToSplitOut": "result.result.slack_messages",
+        "options": {}
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.spam_slack_workflow_id }}"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "ad5838a0-fd0a-40e3-b1fa-62ff46f5e1dd",
+      "name": "Send Slack Message",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2200,
+        260
+      ],
+      "notes": "One execution of the 'Spam Slack' sub-workflow per message, not waited for: a review card waits for its click there, so this run never blocks."
     }
   ],
   "connections": {
@@ -860,7 +1120,7 @@
       "main": [
         [
           {
-            "node": "Plan Upserts",
+            "node": "Read Known Spam",
             "type": "main",
             "index": 0
           }
@@ -1079,6 +1339,89 @@
         [
           {
             "node": "Skipped Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Known Spam": {
+      "main": [
+        [
+          {
+            "node": "Read Spam Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Spam Table": {
+      "main": [
+        [
+          {
+            "node": "Score Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Rows": {
+      "main": [
+        [
+          {
+            "node": "Score OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score OK?": {
+      "main": [
+        [
+          {
+            "node": "Split Table Writes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Slack Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Plan Upserts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Table Writes": {
+      "main": [
+        [
+          {
+            "node": "Upsert Spam Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Slack Messages": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Message",
             "type": "main",
             "index": 0
           }

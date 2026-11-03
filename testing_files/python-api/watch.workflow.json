@@ -1,0 +1,62 @@
+{
+  "id": "PyApiWatch000001",
+  "name": "python-api watch (hourly from Jenkins)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "7d2c4b63-1a4f-4d66-8e8b-2a6b9f2c1b01",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7d2c4b63-1a4f-4d66-8e8b-pyapiwatch001",
+      "parameters": {
+        "path": "pyapi-watch",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "7d2c4b63-1a4f-4d66-8e8b-2a6b9f2c1b02",
+      "name": "Run watch script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "pyapi_watch.py needs tabulate: runs in a python-api venv. Timeout above the 300 s request budget.",
+      "parameters": {
+        "method": "POST",
+        "url": "http://python-api:8000/execute",
+        "options": {
+          "timeout": 330000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code_file_name: 'pyapi_watch.py', data: $json.body }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Run watch script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

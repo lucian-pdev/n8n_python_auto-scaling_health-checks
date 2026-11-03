@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 
-from packagemanager import PackageManager
-from exceptions import JobRetryingException, VenvCreationException
-import subprocess
-import json
-import datetime as dt
-from multiprocessing import Process, Queue
-import multiprocessing
-import time
-import os
-from pathlib import Path
-import logging
-from typing import Optional, Dict, Any, Tuple
 import ctypes
 import ctypes.util
+import datetime as dt
+import json
+import logging
+import multiprocessing
+import os
+import subprocess
+import time
+from multiprocessing import Queue
+from pathlib import Path
+from typing import Any
 
-#WARNING: this caused a memory leak when a new worker would fork main.py
-# try:
-#     from main import ACTIVE_WORKERS, WORKER_RESTARTS
-# except ImportError:
-#     ACTIVE_WORKERS = None
-#     WORKER_RESTARTS = None
+from exceptions import JobRetryingException, VenvCreationException
+from packagemanager import PackageManager
 
 logger = logging.getLogger(__name__)
 WRAPPER_PATH = Path("/app/wrapper.py")
@@ -40,7 +34,7 @@ def _trim_malloc():
 # Task handling
 ##############################################################
 
-def _validate_task(task: Any) -> Tuple[bool, Optional[str]]:
+def _validate_task(task: Any) -> tuple[bool, str | None]:
     """
     Validate task format from job queue.
     Returns (is_valid, signal_or_error).
@@ -61,7 +55,7 @@ def _validate_task(task: Any) -> Tuple[bool, Optional[str]]:
     return (True, "job")
 
 
-def _unpack_job(task: Tuple) -> Tuple[str, str, str, Dict]:
+def _unpack_job(task: tuple) -> tuple[str, str, str, dict]:
     """
     Unpack validated job task into components.
     Returns: (job_id, script_name, code, data)
@@ -73,7 +67,7 @@ def _unpack_job(task: Tuple) -> Tuple[str, str, str, Dict]:
 # Job execution
 ##############################################################
 
-def _prepare_payload(job_id: str, script_name: str, code: str, data: Dict) -> str:
+def _prepare_payload(job_id: str, script_name: str, code: str, data: dict) -> str:
     """Serialize payload for wrapper stdin. script_name labels tracebacks."""
     return json.dumps({
         "job_id": job_id,
@@ -119,15 +113,15 @@ def _execute_job(
     job_id: str,
     script_name: str,
     code: str,
-    data: Dict,
+    data: dict,
     package_manager: PackageManager
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Execute a single job with venv resolution and wrapper execution.
     Returns output dict for result_queue.
     """
     start_time = time.time()
-    venv_path: Optional[Path] = None
+    venv_path: Path | None = None
     
     try:
         python_exe, scripts_dir, venv_path = package_manager.prepare_environment(script_name)
@@ -166,7 +160,7 @@ def _execute_job(
         logger.exception(f"Unexpected error in worker for job {job_id}")
         return _build_error_output(
             job_id, "error",
-            f"Worker internal error: {str(e)}",
+            f"Worker internal error: {e!s}",
             start_time
         )
 
@@ -177,7 +171,7 @@ def _build_error_output(
     error: str,
     start_time: float,
     venv_corrupted: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build standardized error output dict."""
     return {
         "job_id": job_id,
@@ -193,7 +187,7 @@ def _build_error_output(
 # Output parsing
 ##############################################################
 
-def _parse_wrapper_output(result: subprocess.CompletedProcess, job_id: str, process_time: float) -> Dict[str, Any]:
+def _parse_wrapper_output(result: subprocess.CompletedProcess, job_id: str, process_time: float) -> dict[str, Any]:
     """Parse wrapper.py output with markers.
 
     Markers first, whatever the exit code: wrapper.py exits 1 on a script error but
@@ -228,7 +222,7 @@ def _extract_json_output(
     end_marker: str,
     job_id: str,
     process_time: float
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Extract and parse JSON from between markers."""
     json_part = stdout.split(start_marker)[1].split(end_marker)[0]
     parsed = json.loads(json_part)
@@ -246,7 +240,7 @@ def _extract_json_output(
     return output
 
 
-def _format_missing_markers_output(stdout: str, job_id: str, process_time: float) -> Dict[str, Any]:
+def _format_missing_markers_output(stdout: str, job_id: str, process_time: float) -> dict[str, Any]:
     """Format error when markers not found."""
     return {
         "job_id": job_id,
@@ -258,7 +252,7 @@ def _format_missing_markers_output(stdout: str, job_id: str, process_time: float
     }
 
 
-def _format_json_error_output(e: json.JSONDecodeError, stdout: str, job_id: str, process_time: float) -> Dict[str, Any]:
+def _format_json_error_output(e: json.JSONDecodeError, stdout: str, job_id: str, process_time: float) -> dict[str, Any]:
     """Format error when JSON parsing fails."""
     return {
         "job_id": job_id,
@@ -276,7 +270,7 @@ def _format_json_error_output(e: json.JSONDecodeError, stdout: str, job_id: str,
 
 def worker_main(job_queue: Queue, result_queue: Queue, 
                 package_manager: PackageManager, 
-                stop_event: multiprocessing.Event): #type: ignore   #TODO: fix worker death and specific worker death
+                stop_event: multiprocessing.Event): #type: ignore
     """
     Worker process with subprocess isolation.
     Receives pre-loaded code but resolves venv by script_name.
@@ -322,11 +316,11 @@ class WorkerManager:
         self.num_workers = num_workers
         self.job_queue: Queue = Queue()
         self.result_queue: Queue = Queue()
-        self.workers: list[Dict] = []
-        self._job_assignments: Dict[str, Dict] = {}
+        self.workers: list[dict] = []
+        self._job_assignments: dict[str, dict] = {}
         self._active_workers = active_workers_gauge
         self._worker_restarts = worker_restarts_counter
-        self._stop_events: Dict[int, multiprocessing.Event] = {}    #type: ignore #TODO: fix worker death and specific worker death
+        self._stop_events: dict[int, multiprocessing.Event] = {}    #type: ignore
         
     def start_workers(self):
         for i in range(self.num_workers):
@@ -339,7 +333,7 @@ class WorkerManager:
            p.start()
            self.workers.append({
                "process": p,
-               "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
+               "birth": dt.datetime.now(dt.UTC).timestamp(),
                "draining": False,
                "worker_id": i,
                "stop_event": stop_event
@@ -365,7 +359,7 @@ class WorkerManager:
             
     def submit(self, job_id: str, script_name: str, code: str, data: dict):
         worker_idx = self._pick_worker()
-        self._job_assignments[job_id] = {
+        self._job_assignments[job_id] = {           #TODO: _job_assignments(jobis popped only on success, never on timeout.
             "worker_idx": worker_idx,
             "script_name": script_name,
             "code": code,
@@ -389,7 +383,7 @@ class WorkerManager:
         
     def get_result(self, job_id: str, timeout: float = 60.0):
         deadline = time.time() + timeout
-        buffer: list[Dict] = []
+        buffer: list[dict] = []
         
         try:
             while time.time() < deadline:
@@ -425,7 +419,7 @@ class WorkerManager:
             
             raise TimeoutError(f"Job {job_id} timed out")
         
-        finally:
+        finally:                                                        #TODO: results buffered in `get_result` are put back on the queue twice
             for r in buffer:
                 self.result_queue.put(r)
             
@@ -463,7 +457,7 @@ class WorkerManager:
         
         self.workers[oldest_idx] = {
              "process": p,
-             "birth": dt.datetime.now(dt.timezone.utc).timestamp(),
+             "birth": dt.datetime.now(dt.UTC).timestamp(),
              "draining": False,
              "stop_event": stop_event
         }

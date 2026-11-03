@@ -11,9 +11,22 @@ A FastAPI-based Python execution service designed for n8n workflow automation. F
 | Deployment | Branch | What it adds |
 |------------|--------|--------------|
 | Proxmox VM (office server, "linksys") | this branch | nothing: the stack as documented here, deployed fresh with `deploy.sh` |
-| Hostinger VPS | `hostinger` | the NB database stack (`docker-compose.nb.yml` + `nb.sh`: Postgres + PostgREST on the main stack's network), the upgrade procedure from the older nginx-based version, and its rehearsal hooks |
+| Installs with extra services | one branch per install | only that install's own files (extra services as their own compose project on this stack's network), run from a second checkout next to this one |
 
-Fixes to the shared stack go here first, then get merged into `hostinger`.
+Fixes to the shared stack go here. An install branch never merges this one, and this one never merges it:
+they share no files.
+
+## Install layout: code and state apart
+
+```
+<base>/main/       checkout of this branch: code only        (.env -> ../local/.env)
+<base>/<install>/  checkout of the install branch, if any   (.env -> ../local/.env)
+<base>/local/      state, never in git: .env, scripts/, job-output/, prometheus/conf.d/, backups/
+```
+
+An update is a `git pull` in the code checkouts. `.env` pins `COMPOSE_PROJECT_NAME` and `NAYPYERS_LOCAL`, so the
+stack finds its volumes and state whatever the folder is called. `deploy/atomic.py` moves an existing
+single-folder install to this layout, step by step, with a rollback (see `deploy/README.md`).
 
 
 ## Upgrades and OS updates

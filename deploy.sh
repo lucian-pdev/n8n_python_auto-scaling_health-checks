@@ -11,6 +11,7 @@ NDIRS=(
 #   postgres-data
     scripts
     job-output
+    prometheus/conf.d
 )
 
 # Exit if not run from project root (where this script resides)
@@ -50,8 +51,10 @@ fi
 sudo apt install -y python3-pip
 
 # Ensuring the directories exist and are owned by USER before docker creates them as ROOT out of necessity
+# NAYPYERS_LOCAL (.env): the install's state dir; empty = this checkout
+LOCAL_DIR="${NAYPYERS_LOCAL:-.}"
 for d in "${NDIRS[@]}"; do
-    mkdir -p "$d"
+    mkdir -p "$LOCAL_DIR/$d"
 done
 
 sudo systemctl enable --now docker
@@ -69,6 +72,9 @@ done
 echo "$SEPARATOR"
 echo "[4] Building and starting services..."
 echo "$SEPARATOR"
+# NAYPYERS_EXPECT_STATE=1 (.env, set after the first deploy): refuse to start next to missing volumes,
+# which Docker would otherwise create empty
+python3 deploy/atomic.py check-state || exit 1
 sudo docker compose build
 sudo docker compose up -d
 
@@ -77,7 +83,7 @@ echo "$SEPARATOR"
 echo "[5] Ensuring permissions..."
 echo "$SEPARATOR"
 sudo chown -R 1000:1000 n8n-data/ 2>/dev/null || true
-sudo chown 1000:1000 scripts/ 2>/dev/null || true
+sudo chown 1000:1000 "$LOCAL_DIR/scripts/" 2>/dev/null || true
 
 # Install systemd services
 echo "$SEPARATOR"

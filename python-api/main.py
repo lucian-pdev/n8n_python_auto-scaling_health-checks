@@ -2,7 +2,8 @@
 
 """
 FastAPI + Uvicorn Python container.
-It will receive HTTP requests on the same virtual network, queue them in a workerpool, then return the results to the caller (desgined for n8n).
+It receives HTTP requests on the same virtual network, runs each one as a job in its own subprocess
+(at most N at once), then returns the result to the caller (designed for n8n).
 
 Expected JSON format from n8n:
 {
@@ -10,7 +11,8 @@ Expected JSON format from n8n:
   "code_file_name": "script_name.py"
 }
 
-Returns: JSON over HTTP
+Returns: JSON over HTTP, when the job is finished (sync). The whole request has a 300 s budget
+(queue wait + attempts): the n8n HTTP Request node's timeout must be above that.
 
 **Inclusion of new packages in python script files on github**
 # requires: pandas==x.y.c, numpy==x.y.c
@@ -18,36 +20,52 @@ Returns: JSON over HTTP
 def example_function(A, B):
     import pandas
     # ... your code here today!
-    
-result = example_function(data["stuff"], data["other_stuff"]) 
+
+result = example_function(data["stuff"], data["other_stuff"])
 ```
 
 **Errors** (HTTP stays 200; check result.status in n8n)
 - `raise ScriptError("msg")` (injected, no import) -> result.error = "msg"
 - any other exception -> result.error = "<Type>: <msg> (line N in <func>)"
-- result.error_type, result.traceback (script frames only) for detail
-- status values: success | error | timeout | venv_error; 202 + "retrying" if a worker died
+- status values: success | fatal. Infrastructure hiccups (timeout, memory cap, crashed subprocess)
+  are retried inside python-api; when retries or time run out: fatal, with result.last_error.
 
 """
 
-import os
-import time
 import asyncio
 import logging
-from pydantic import BaseModel
-from typing import Dict, Any
-import uuid
+import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-# Prometheus for metrics
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST # type: ignore
+from typing import Any
+
+# Uvicorn as HTTP server inside python-api container
+import uvicorn
+from exceptions import FatalError, JobNotFound
+
 # FastAPI for HTTP request handling
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
-# Uvicorn as HTTP server inside python-api container
-import uvicorn
-from exceptions import JobRetryingException
 
+# Prometheus for metrics
+from metrics import (
+    ACTIVE_JOBS,
+    JOB_RETRIES,
+    PARENT_RSS,
+    QUEUE_SIZE,
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+    SCRIPT_EXECUTION_DURATION,
+    SCRIPT_EXECUTIONS,
+    update_container_metrics,
+)
+from packagemanager import PackageManager
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # type: ignore
+from pydantic import BaseModel
+from workerv2 import IN_PROGRESS, TODO, Runner, max_concurrent_jobs
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")  # uvicorn only sets up its own loggers
 logger = logging.getLogger("python-api")
 
 
@@ -56,189 +74,128 @@ logger = logging.getLogger("python-api")
 ##############################################################
 SCRIPTS_DIR = os.environ.get("SCRIPTS_DIR", "/app/scripts")
 VENV_BASE = Path(os.environ.get("VENV_BASE", "/app/venvs"))
-SCRIPTS_REPO = os.environ.get("SCRIPTS_REPO")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-MAX_VENV_SIZE_GB = float(os.environ.get("MAX_VENV_SIZE_GB", "10"))
+DISCONNECT_POLL_SECONDS = 1
 
-##############################################################
-# Prometheus Metrics
-##############################################################
-REQUEST_COUNT = Counter('py_api_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
-REQUEST_DURATION = Histogram('py_api_request_duration_seconds', 'Request duration')
-ACTIVE_WORKERS = Gauge('py_api_active_workers', 'Number of active worker processes')
-QUEUE_SIZE = Gauge('py_api_queue_size', 'Current job queue size')
-WORKER_RESTARTS = Counter('py_api_worker_restarts_total', 'Total worker restarts')
-SCRIPT_EXECUTIONS = Counter('py_api_script_executions_total', 'Script executions', ['script_name', 'status'])
-VENV_CREATIONS = Counter('py_api_venv_creations_total', 'Virtual environment creations')
-VENV_CACHE_HITS = Counter('py_api_venv_cache_hits_total', 'Virtual environment cache hits')
-SCRIPT_EXECUTION_DURATION = Histogram(
-    'py_api_script_execution_duration_seconds',
-    'Per-script execution time in seconds',
-    ['script_name']
-)
-JOB_RETRIES = Counter(
-    'py_api_job_retries_total',
-    'Jobs retried due to worker death',
-    ['script_name']
-)
-VENV_CORRUPTIONS = Counter(
-    'py_api_venv_corruptions_total',
-    'Venv corruption events detected'
-)
-OLDEST_WORKER_AGE = Gauge(
-    'py_api_oldest_worker_age_seconds',
-    'Age in seconds of the oldest running worker process'
-)
-##############################################################
-# Virtual environment handling area
-##############################################################
-# local files
-from worker import WorkerManager
 
-##############################################################
-# Script loader area
-##############################################################
-_script_cache: dict[str, tuple[float, str]] = {}
-_script_lock = asyncio.Lock()
+def _parent_rss_bytes() -> int:
+    """VmRSS of this process, 0 where /proc is missing (local run on macOS)."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
 
-async def load_scripts(code_file_name: str) -> tuple[str, str]:
-    name = os.path.basename(code_file_name)
-    file_path = Path(SCRIPTS_DIR) / name
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Script not found: {name}")
-
-    current_mtime = file_path.stat().st_mtime
-
-    # Fast path: no lock
-    cached = _script_cache.get(name)
-    if cached and cached[0] == current_mtime:
-        return name, cached[1]
-
-    # Slow path: lock + re-check + load
-    async with _script_lock:
-        cached = _script_cache.get(name)
-        if cached and cached[0] == current_mtime:
-            return name, cached[1]
-
-        code = await asyncio.to_thread(file_path.read_text)
-        _script_cache[name] = (current_mtime, code)
-        return name, code
 
 ##############################################################
 # FastAPI area
 ##############################################################
 class ExecPayload(BaseModel):
-    data: Dict[str, Any]
+    data: dict[str, Any]
     code_file_name: str
 
-# manager = WorkerManager(num_workers=4)    #WARNING: caused memory leak on new workers
 
-manager = WorkerManager(
-    num_workers=4,
-    active_workers_gauge=ACTIVE_WORKERS,
-    worker_restarts_counter=WORKER_RESTARTS
-)
+runner: Runner  # set in lifespan: PackageManager runs pip at start
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    manager.start_workers()
-    
+    global runner
+    runner = Runner(
+        PackageManager(SCRIPTS_DIR, VENV_BASE),
+        max_concurrent=max_concurrent_jobs(),
+        on_retry=lambda job, error: JOB_RETRIES.labels(script_name=job.script).inc(),
+    )
+    logger.warning(f"python-api ready: at most {runner.max_concurrent} jobs at once")  # warning: uvicorn shows it
+
     # For Prometheus/grafana
     async def metrics_updater():
         while True:
-            # Approximate queue size (multiprocessing.Queue doesn't expose size reliably)
-            QUEUE_SIZE.set(0)  # Placeholder - would need custom queue for accurate size
-            if manager.workers:
-                now = time.time()
-                oldest_birth = min(w["birth"] for w in manager.workers)
-                OLDEST_WORKER_AGE.set(now - oldest_birth)
+            counts = runner.active.counts()
+            QUEUE_SIZE.set(counts[TODO])
+            ACTIVE_JOBS.set(counts[IN_PROGRESS])
+            PARENT_RSS.set(_parent_rss_bytes())
+            update_container_metrics()
             await asyncio.sleep(10)
-    
-    # BACKGROUND TASK: runs concurrently with FastAPI
-    async def restart_loop():
-        while True:
-            await asyncio.sleep(300)  # 5 minutes
-            manager.restart_oldest_worker()
-    
+
     metrics_task = asyncio.create_task(metrics_updater())
-    restart_task = asyncio.create_task(restart_loop())
-    
+
     yield # FastAPI runs here
 
-    # Request cancellation
     metrics_task.cancel()
-    restart_task.cancel()
-        
-    # Shutdown: cancel loop, stop workers
-  
     try:
-        # Wait for task to actually stop
         await metrics_task
-        await restart_task
     except asyncio.CancelledError:
         pass    # Expected when cancelled
-    manager.stop_workers()
-    
+
+
+class PrometheusMiddleware:
+    """Plain ASGI middleware. Not @app.middleware("http"): that one wraps `receive`, so the endpoint
+    never sees n8n hanging up and a cancelled request's subprocess would keep running."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        start_time = time.time()
+        status = 500
+
+        async def send_with_status(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_status)
+        finally:
+            route = scope.get("route")  # template like /jobs/{job_id}, so labels stay bounded
+            REQUEST_DURATION.observe(time.time() - start_time)
+            REQUEST_COUNT.labels(
+                method=scope["method"],
+                endpoint=route.path if route else "unmatched",
+                status=status
+            ).inc()
+
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(PrometheusMiddleware)
 
-@app.middleware("http")
-async def prometheus_middleware(request: Request, call_next):
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-    
-    REQUEST_DURATION.observe(duration)
-    REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status=response.status_code
-    ).inc()
-    
-    return response
+
+async def _run_until_disconnect(request: Request, job: asyncio.Task) -> Any:
+    """Wait for the job; if n8n hangs up first, cancel it (the runner kills the subprocess and drops the row)."""
+    while True:
+        done, _ = await asyncio.wait({job}, timeout=DISCONNECT_POLL_SECONDS)
+        if done:
+            return job.result()
+        if await request.is_disconnected():
+            job.cancel()
+            await asyncio.gather(job, return_exceptions=True)
+            raise HTTPException(status_code=499, detail="client disconnected")
+
 
 @app.post("/execute")
-async def execute(payload: ExecPayload):
-    script_name, code = await load_scripts(payload.code_file_name)
-    
-    job_id = str(uuid.uuid4())
-    manager.submit(job_id, script_name, code, payload.data)
-    
+async def execute(payload: ExecPayload, request: Request):
+    script_name = os.path.basename(payload.code_file_name)  # no paths out of SCRIPTS_DIR
+    if not (Path(SCRIPTS_DIR) / script_name).is_file():
+        raise HTTPException(status_code=404, detail=f"Script not found: {script_name}")
+
+    start_time = time.time()
     try:
-        result = manager.get_result(job_id)
+        result = await _run_until_disconnect(request, asyncio.create_task(runner.run(script_name, payload.data)))
+    except FatalError as e:
+        SCRIPT_EXECUTIONS.labels(script_name=script_name, status=e.status).inc()
+        logger.warning("job %s %s %s: %s", e.job_id, script_name, type(e).__name__, e.message)  # docker compose logs python-api
+        # "error" + "error_type" keep the shape the n8n workflows read (result.status / result.error)
+        return {"result": {**e.to_dict(), "error": e.message, "error_type": type(e).__name__}}
 
-        status = result.get("status", "unknown") if result else "unknown"
-
-        SCRIPT_EXECUTIONS.labels(
-            script_name=payload.code_file_name,
-            status=status
-        ).inc()
-
-        if status != "success":                     # docker compose logs python-api
-            logger.warning("job %s %s %s: %s", job_id, script_name, status, (result or {}).get("error"))
-
-        if result and result.get("process_time"):
-            SCRIPT_EXECUTION_DURATION.labels(
-                script_name=script_name
-            ).observe(result["process_time"])
-
-        return {"result": result}
-
-    except JobRetryingException as e:
-        JOB_RETRIES.labels(script_name=e.script_name or "unknown").inc()
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=202,
-            content={
-                "result": None,
-                "status": "retrying",
-                "message": e.message,
-                "job_id": e.job_id,
-                "attempt": e.attempt,
-                "script_name": e.script_name
-            }
-        )
+    process_time = time.time() - start_time
+    SCRIPT_EXECUTIONS.labels(script_name=script_name, status="success").inc()
+    SCRIPT_EXECUTION_DURATION.labels(script_name=script_name).observe(process_time)
+    return {"result": {"status": "success", "result": result, "process_time": process_time}}
 
 ##############################################################
 # Bonus: /scripts endpoint
@@ -263,7 +220,29 @@ async def list_scripts():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "workers": len(manager.workers)}
+    counts = runner.active.counts()
+    return {
+        "status": "ok",
+        "jobs": {"todo": counts[TODO], "in_progress": counts[IN_PROGRESS]},
+        "max_concurrent": runner.max_concurrent,
+        "rss_mb": round(_parent_rss_bytes() / 1024 / 1024, 1),
+    }
+
+@app.get("/jobs/{job_id}")
+async def get_job(job_id: str):
+    """Read-only view of an unfinished job, for debugging. Finished jobs are gone: 404."""
+    try:
+        job = runner.active.get(job_id)
+    except JobNotFound as e:
+        raise HTTPException(status_code=404, detail=e.message) from None
+    return {
+        "job_id": job.job_id,
+        "script": job.script,
+        "status": job.status,
+        "attempts": job.attempts,
+        "age_seconds": round(time.time() - job.created_at, 1),
+        "time_left": round(job.time_left(), 1),
+    }
 
 @app.get("/metrics", response_class=PlainTextResponse)
 async def metrics():
